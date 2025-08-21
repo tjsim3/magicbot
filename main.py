@@ -2,8 +2,8 @@ import os
 import asyncio
 import discord
 from discord.ext import commands
-from bot.commands import setup_commands
-from bot.events import setup_events
+from commands import setup_commands  # Changed from bot.commands
+from events import setup_events      # Changed from bot.events
 from models import create_app
 
 # Bot configuration
