@@ -15,7 +15,6 @@ signups = set()
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix='%', intents=intents)
-bot.help_command = None
 
 # Store start time for uptime calculation
 bot.start_time = time.time()
@@ -763,6 +762,7 @@ async def setup_commands(bot):
 @bot.event
 async def on_ready():
     print(f'{bot.user} has connected to Discord!')
+    bot.help_command = None
     await bot.change_presence(
         activity=discord.Activity(
             type=discord.ActivityType.watching,  
