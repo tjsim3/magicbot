@@ -22,6 +22,19 @@ def get_server_info():
     """Simple server info placeholder"""
     return "Server information"
 
+# Import new HP-based duel system
+from models import db_session, ActiveDuel, DuelPlayer, get_or_create_player, cleanup_expired_duels, get_player_stats
+
+# Create duel embed function (since it was in utils)
+def create_duel_embed(title, description, color):
+    """Create a standardized duel embed"""
+    import discord
+    return discord.Embed(
+        title=title,
+        description=description,
+        color=color
+    )
+
 async def setup_commands(bot):
     """Setup all bot commands"""
     global signup_message_id, signups
@@ -430,9 +443,9 @@ async def setup_commands(bot):
         embed.add_field(name="Owner", value=guild.owner.mention, inline=True)
         embed.add_field(name="Members", value=guild.member_count, inline=True)
         embed.add_field(name="Created", value=guild.created_at.strftime("%B %d, %Y"), inline=True)
-        embed.add_field(name="Text Channels", value=len(guild.text_channels), inline=True)
-        embed.add_field(name="Voice Channels", value=len(guild.voice_channels), inline=True)
-        embed.add_field(name="Roles", value=len(guild.roles), inline=True)
+        embed.add_field(name="Text Channels", value=f"{len(guild.text_channels)}", inline=True)
+        embed.add_field(name="Voice Channels", value=f"{len(guild.voice_channels)}", inline=True)
+        embed.add_field(name="Roles", value=f"{len(guild.roles)}", inline=True)
         
         if guild.icon:
             embed.set_thumbnail(url=guild.icon.url)
@@ -630,19 +643,6 @@ async def setup_commands(bot):
         await ctx.send(embed=embed)
     
     # ---------------- SPELL DUEL GAME ----------------
-    # Import new HP-based duel system
-    from models import db, ActiveDuel, DuelPlayer
-    
-    # Duel system helper functions
-    def get_or_create_player(discord_id, username):
-        """Get or create a duel player"""
-        player = DuelPlayer.query.filter_by(discord_id=discord_id).first()
-        if not player:
-            player = DuelPlayer(discord_id=discord_id, username=username)
-            db.session.add(player)
-            db.session.commit()
-        return player
-    
     def process_combat_round(duel, challenger_spell, opponent_spell):
         """Process a combat round between two spells"""
         combat_log = []
@@ -678,7 +678,7 @@ async def setup_commands(bot):
         duel.challenger_spell = None
         duel.opponent_spell = None
         
-        db.session.commit()
+        db_session.commit()
         return combat_log, is_tie
     
     def finish_duel(duel):
@@ -715,47 +715,12 @@ async def setup_commands(bot):
         duel.challenger.last_active = now
         duel.opponent.last_active = now
         
-        db.session.commit()
+        db_session.commit()
         
         return {
             'winner': winner,
             'duration_minutes': duration_minutes
         }
-    
-    def cleanup_expired_duels():
-        """Clean up expired duels"""
-        now = datetime.now(timezone.utc)
-        expired_duels = ActiveDuel.query.filter(
-            (ActiveDuel.turn_deadline < now) & (ActiveDuel.status == 'active')
-        ).all()
-        
-        for duel in expired_duels:
-            duel.status = 'expired'
-            db.session.commit()
-    
-    def get_player_stats(discord_id):
-        """Get player statistics"""
-        player = DuelPlayer.query.filter_by(discord_id=discord_id).first()
-        if not player:
-            return None
-        
-        if player.games_played > 0:
-            win_rate = (player.total_wins / player.games_played) * 100
-        else:
-            win_rate = 0
-        
-        return {
-            'player': player,
-            'win_rate': win_rate
-        }
-    
-    def create_duel_embed(title, description, color):
-        """Create a standardized duel embed"""
-        return discord.Embed(
-            title=title,
-            description=description,
-            color=color
-        )
     
     @bot.command(name='duel')
     async def spell_duel(ctx, opponent: discord.Member = None):
@@ -776,7 +741,7 @@ async def setup_commands(bot):
         cleanup_expired_duels()
         
         # Check if either player is already in an active duel
-        existing_duel = ActiveDuel.query.filter(
+        existing_duel = db_session.query(ActiveDuel).filter(
             ((ActiveDuel.challenger_id == ctx.author.id) | (ActiveDuel.opponent_id == ctx.author.id) |
              (ActiveDuel.challenger_id == opponent.id) | (ActiveDuel.opponent_id == opponent.id)) &
             (ActiveDuel.status == 'active')
@@ -800,8 +765,8 @@ async def setup_commands(bot):
             turn_deadline=datetime.now(timezone.utc) + timedelta(hours=12)
         )
         
-        db.session.add(new_duel)
-        db.session.commit()
+        db_session.add(new_duel)
+        db_session.commit()
         
         embed = create_duel_embed(
             "⚔️ Epic Spell Duel Begins!",
@@ -846,7 +811,7 @@ async def setup_commands(bot):
         cleanup_expired_duels()
         
         # Find if user is in an active duel
-        user_duel = ActiveDuel.query.filter(
+        user_duel = db_session.query(ActiveDuel).filter(
             ((ActiveDuel.challenger_id == ctx.author.id) | (ActiveDuel.opponent_id == ctx.author.id)) &
             (ActiveDuel.status == 'active')
         ).first()
