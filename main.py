@@ -40,7 +40,9 @@ async def main():
 
 if __name__ == "__main__":
     # Initialize database
-    app = create_app()
+    # Initialize database (already handled in models.py)
+    from models import init_database
+    init_database()
     print("✅ Database initialized successfully!")
     
     # Run the bot
