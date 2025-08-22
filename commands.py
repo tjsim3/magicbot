@@ -372,6 +372,44 @@ async def setup_commands(bot):
             color=discord.Color.green()
         )
         await ctx.send(embed=embed)
+
+    @bot.command(name='emojis')
+    async def emojis_command(ctx, emoji1: str, emoji2: str, emoji3: str = None, emoji4: str = None):
+        """
+        Replace emojis at the beginning of the channel name.
+        Usage: %emojis 😊 👍 [optional_emoji3] [optional_emoji4]
+        """
+        # Check if user has @spellkeeper role
+        spellkeeper_role = discord.utils.get(ctx.author.roles, name="spellkeeper")
+        if not spellkeeper_role:
+            await ctx.send("❌ You need the @spellkeeper role to use this command!")
+            return
+        
+        # Get all emojis provided (filter out None values)
+        new_emojis = [emoji for emoji in [emoji1, emoji2, emoji3, emoji4] if emoji is not None]
+        
+        # Remove any existing emojis from the beginning of the channel name
+        current_name = ctx.channel.name
+        # Regex to match emojis at the start (including custom emojis)
+        cleaned_name = re.sub(r'^(\s*<a?:[a-zA-Z0-9_]+:[0-9]+>\s*|\s*[^\w\s]\s*)+', '', current_name)
+        cleaned_name = cleaned_name.strip()
+        
+        # Combine new emojis with cleaned channel name
+        emoji_string = ' '.join(new_emojis)
+        new_channel_name = f"{emoji_string} {cleaned_name}".strip()
+        
+        # Discord channel name limit is 100 characters
+        if len(new_channel_name) > 100:
+            await ctx.send("❌ The new channel name is too long! Maximum 100 characters.")
+            return
+        
+        try:
+            await ctx.channel.edit(name=new_channel_name)
+            await ctx.send(f"✅ Channel emojis updated to: {emoji_string}")
+        except discord.Forbidden:
+            await ctx.send("❌ I don't have permission to edit this channel!")
+        except discord.HTTPException as e:
+            await ctx.send(f"❌ Failed to update channel: {e}")
     
     @bot.command(name='info')
     async def bot_info(ctx):
