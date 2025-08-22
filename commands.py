@@ -6,11 +6,11 @@ import random
 import os
 import time
 
-# Global variables for signup system
+# Global variables for signup system (in-memory only)
 signup_message_id = None
 signups = set()
 
-# Helper functions to replace utils imports
+# Helper functions
 def format_uptime(seconds):
     """Format uptime seconds into human readable string"""
     days, seconds = divmod(seconds, 86400)
@@ -18,17 +18,8 @@ def format_uptime(seconds):
     minutes, seconds = divmod(seconds, 60)
     return f"{int(days)}d {int(hours)}h {int(minutes)}m {int(seconds)}s"
 
-def get_server_info():
-    """Simple server info placeholder"""
-    return "Server information"
-
-# Import new HP-based duel system
-from models import db_session, ActiveDuel, DuelPlayer, get_or_create_player, cleanup_expired_duels, get_player_stats
-
-# Create duel embed function (since it was in utils)
 def create_duel_embed(title, description, color):
-    """Create a standardized duel embed"""
-    import discord
+    """Create a standardized embed"""
     return discord.Embed(
         title=title,
         description=description,
@@ -40,8 +31,8 @@ async def setup_commands(bot):
     global signup_message_id, signups
     
     # Get configuration from environment variables
-    GUILD_ID = int(os.getenv('GUILD_ID', 0))  # You'll need to add this to secrets
-    CHANNEL_ID = int(os.getenv('CHANNEL_ID', 0))  # You'll need to add this to secrets
+    GUILD_ID = int(os.getenv('GUILD_ID', 0))
+    CHANNEL_ID = int(os.getenv('CHANNEL_ID', 0))
     
     # ---------------- SIGNUP LOGIC ----------------
     async def post_signup_message():
@@ -111,7 +102,6 @@ async def setup_commands(bot):
             await channel.send("### Match Assignments:")
             for i, match in enumerate(matches, 1):
                 mention_list = " + ".join([m.mention for m in match])
-                roles = [f"({len([r for r in member.roles if r.name.lower() in ['wizard', 'apprentice', 'sage']])}{[r.name.title() for r in member.roles if r.name.lower() in ['wizard', 'apprentice', 'sage']][0] if [r for r in member.roles if r.name.lower() in ['wizard', 'apprentice', 'sage']] else 'Unknown'})" for member in match]
                 await channel.send(f"**Match {i}:** {mention_list}")
             
             await channel.send(f"\n✅ **{len(matches)} matches created** from {len(signups)} signups!")
@@ -129,7 +119,6 @@ async def setup_commands(bot):
         
         await ctx.send(f"⏰ Okay {ctx.author.mention}, I will remind you in {time_in_minutes} minute(s).")
         
-        # Use create_task to prevent blocking
         async def send_reminder():
             await asyncio.sleep(time_in_minutes * 60)
             try:
@@ -165,7 +154,6 @@ async def setup_commands(bot):
 
         await ctx.send(f"⏰ Okay {ctx.author.mention}, I will remind you at {target_dt} UTC.")
         
-        # Use create_task to prevent blocking
         async def send_scheduled_reminder():
             await asyncio.sleep(delay)
             try:
@@ -370,20 +358,6 @@ async def setup_commands(bot):
             inline=False
         )
         
-        # Game commands
-        embed.add_field(
-            name="⚔️ HP-Based Spell Duels",
-            value=(
-                "`%duel @user` - Challenge someone to an HP duel (3 HP each)\n"
-                "`%cast <spell>` - Cast a spell on your turn (12h limit)\n"
-                "`%duels` - Show active duels with HP and turn info\n"
-                "`%cancelduels` - Cancel your active duels\n"
-                "`%duelstats [@user]` - View duel statistics\n"
-                "`%spells` - View all spells and strategy guide"
-            ),
-            inline=False
-        )
-        
         embed.set_footer(text="Training signups happen automatically on the first Monday of each month!")
         await ctx.send(embed=embed)
     
@@ -474,7 +448,6 @@ async def setup_commands(bot):
                 await ctx.send("❌ Dice count and sides must be positive numbers!")
                 return
             
-            import random
             rolls = [random.randint(1, sides) for _ in range(count)]
             total = sum(rolls)
             
@@ -499,7 +472,6 @@ async def setup_commands(bot):
     @bot.command(name='flip')
     async def flip_coin(ctx):
         """Flip a coin"""
-        import random
         result = random.choice(["Heads", "Tails"])
         embed = discord.Embed(
             title="🪙 Coin Flip",
@@ -515,7 +487,6 @@ async def setup_commands(bot):
             await ctx.send("❌ You need to ask a question! Try `%8ball Will I win the next match?`")
             return
         
-        import random
         responses = [
             "It is certain", "Without a doubt", "Yes definitely", "You may rely on it",
             "As I see it, yes", "Most likely", "Outlook good", "Yes", "Signs point to yes",
@@ -536,7 +507,6 @@ async def setup_commands(bot):
     @bot.command(name='quote')
     async def inspirational_quote(ctx):
         """Get an inspirational quote"""
-        import random
         quotes = [
             ("The only way to do great work is to love what you do.", "Steve Jobs"),
             ("Magic is believing in yourself. If you can do that, you can make anything happen.", "Johann Wolfgang von Goethe"),
@@ -577,7 +547,6 @@ async def setup_commands(bot):
             await ctx.send("❌ I need at least 2 options to choose from!")
             return
         
-        import random
         choice = random.choice(options)
         embed = discord.Embed(
             title="🤔 Decision Made!",
@@ -640,523 +609,6 @@ async def setup_commands(bot):
         embed.set_image(url=avatar_url)
         embed.add_field(name="Download", value=f"[Click here]({avatar_url})", inline=False)
         
-        await ctx.send(embed=embed)
-    
-    # ---------------- SPELL DUEL GAME ----------------
-    def process_combat_round(duel, challenger_spell, opponent_spell):
-        """Process a combat round between two spells"""
-        combat_log = []
-        is_tie = False
-        
-        # Spell effectiveness chart
-        spell_effects = {
-            'fireball': {'beats': ['frostbolt', 'heal'], 'loses_to': ['shield', 'lightning']},
-            'frostbolt': {'beats': ['lightning', 'magicmissile'], 'loses_to': ['fireball', 'heal']},
-            'lightning': {'beats': ['fireball', 'shield'], 'loses_to': ['frostbolt', 'magicmissile']},
-            'shield': {'beats': ['magicmissile', 'fireball'], 'loses_to': ['lightning', 'heal']},
-            'heal': {'beats': ['shield', 'frostbolt'], 'loses_to': ['fireball', 'magicmissile']},
-            'magicmissile': {'beats': ['heal', 'lightning'], 'loses_to': ['shield', 'frostbolt']}
-        }
-        
-        # Determine winner
-        if challenger_spell == opponent_spell:
-            # Tie - no damage
-            combat_log.append("✨ Spells clash! It's a tie - no damage dealt.")
-            is_tie = True
-        elif opponent_spell in spell_effects[challenger_spell]['beats']:
-            # Challenger wins
-            duel.opponent_hp -= 1
-            combat_log.append(f"💥 {duel.challenger.username}'s {challenger_spell} hits {duel.opponent.username}!")
-            combat_log.append(f"❤️ {duel.opponent.username} loses 1 HP!")
-        else:
-            # Opponent wins
-            duel.challenger_hp -= 1
-            combat_log.append(f"💥 {duel.opponent.username}'s {opponent_spell} hits {duel.challenger.username}!")
-            combat_log.append(f"❤️ {duel.challenger.username} loses 1 HP!")
-        
-        # Reset spells for next round
-        duel.challenger_spell = None
-        duel.opponent_spell = None
-        
-        db_session.commit()
-        return combat_log, is_tie
-    
-    def finish_duel(duel):
-        """Finish a duel and record results"""
-        now = datetime.now(timezone.utc)
-        duration = now - duel.created_at
-        duration_minutes = int(duration.total_seconds() / 60)
-        
-        # Determine winner
-        if duel.challenger_hp <= 0 and duel.opponent_hp <= 0:
-            # Draw
-            duel.status = 'draw'
-            duel.challenger.total_draws += 1
-            duel.opponent.total_draws += 1
-            winner = None
-        elif duel.challenger_hp <= 0:
-            # Opponent wins
-            duel.status = 'completed'
-            duel.winner_id = duel.opponent_id
-            duel.challenger.total_losses += 1
-            duel.opponent.total_wins += 1
-            winner = duel.opponent
-        else:
-            # Challenger wins
-            duel.status = 'completed'
-            duel.winner_id = duel.challenger_id
-            duel.challenger.total_wins += 1
-            duel.opponent.total_losses += 1
-            winner = duel.challenger
-        
-        # Update games played and last active
-        duel.challenger.games_played += 1
-        duel.opponent.games_played += 1
-        duel.challenger.last_active = now
-        duel.opponent.last_active = now
-        
-        db_session.commit()
-        
-        return {
-            'winner': winner,
-            'duration_minutes': duration_minutes
-        }
-    
-    @bot.command(name='duel')
-    async def spell_duel(ctx, opponent: discord.Member = None):
-        """Challenge someone to a magical HP-based spell duel!"""
-        if opponent is None:
-            await ctx.send("❌ You need to mention someone to duel! Try `%duel @username`")
-            return
-        
-        if opponent == ctx.author:
-            await ctx.send("❌ You cannot duel yourself! Find a worthy opponent.")
-            return
-        
-        if opponent.bot:
-            await ctx.send("❌ You cannot duel bots! Challenge a real wizard.")
-            return
-        
-        # Clean up expired duels
-        cleanup_expired_duels()
-        
-        # Check if either player is already in an active duel
-        existing_duel = db_session.query(ActiveDuel).filter(
-            ((ActiveDuel.challenger_id == ctx.author.id) | (ActiveDuel.opponent_id == ctx.author.id) |
-             (ActiveDuel.challenger_id == opponent.id) | (ActiveDuel.opponent_id == opponent.id)) &
-            (ActiveDuel.status == 'active')
-        ).first()
-        
-        if existing_duel:
-            await ctx.send("⚔️ One of you is already in an active duel! Use `%duels` to see active duels.")
-            return
-        
-        # Get or create players
-        challenger_player = get_or_create_player(ctx.author.id, ctx.author.display_name)
-        opponent_player = get_or_create_player(opponent.id, opponent.display_name)
-        
-        # Create new duel with HP system
-        new_duel = ActiveDuel(
-            challenger_id=challenger_player.id,
-            opponent_id=opponent_player.id,
-            challenger_hp=3,
-            opponent_hp=3,
-            current_turn='challenger',
-            turn_deadline=datetime.now(timezone.utc) + timedelta(hours=12)
-        )
-        
-        db_session.add(new_duel)
-        db_session.commit()
-        
-        embed = create_duel_embed(
-            "⚔️ Epic Spell Duel Begins!",
-            f"{ctx.author.mention} has challenged {opponent.mention} to an HP-based magical duel!",
-            discord.Color.red()
-        )
-        
-        embed.add_field(
-            name="🏠 HP System",
-            value="**Each duelist starts with 3 HP**\nFirst to reduce opponent to 0 HP wins!",
-            inline=False
-        )
-        
-        embed.add_field(
-            name="⏰ Turn System", 
-            value=f"**{ctx.author.display_name}'s turn** (12 hours to cast)\nUse `%cast <spell>` to attack!",
-            inline=False
-        )
-        
-        embed.add_field(
-            name="❤️ Current HP",
-            value=f"**{ctx.author.display_name}:** 3 HP ❤️❤️❤️\n**{opponent.display_name}:** 3 HP ❤️❤️❤️",
-            inline=False
-        )
-        
-        embed.add_field(
-            name="Available Spells:",
-            value="🔥 Fireball • ❄️ Frostbolt • ⚡ Lightning • 🛡️ Shield • ✨ Heal • 💫 Magic Missile",
-            inline=False
-        )
-        
-        await ctx.send(embed=embed)
-    
-    @bot.command(name='cast')
-    async def cast_spell(ctx, *, spell_name: str = None):
-        """Cast a spell in your active HP-based duel"""
-        if spell_name is None:
-            await ctx.send("❌ You need to specify a spell! Available: Fireball, Frostbolt, Lightning, Shield, Heal, Magic Missile")
-            return
-        
-        # Clean up expired duels
-        cleanup_expired_duels()
-        
-        # Find if user is in an active duel
-        user_duel = db_session.query(ActiveDuel).filter(
-            ((ActiveDuel.challenger_id == ctx.author.id) | (ActiveDuel.opponent_id == ctx.author.id)) &
-            (ActiveDuel.status == 'active')
-        ).first()
-        
-        if not user_duel:
-            await ctx.send("❌ You're not in an active duel! Use `%duel @someone` to start one.")
-            return
-        
-        # Check if it's the user's turn
-        is_challenger = ctx.author.id == user_duel.challenger_id
-        is_users_turn = (user_duel.current_turn == 'challenger' and is_challenger) or \
-                       (user_duel.current_turn == 'opponent' and not is_challenger)
-        
-        if not is_users_turn:
-            other_player = user_duel.challenger.username if not is_challenger else user_duel.opponent.username
-            await ctx.send(f"❌ It's not your turn! Waiting for **{other_player}** to cast their spell.")
-            return
-        
-        # Check for turn timeout
-        if datetime.now(timezone.utc) > user_duel.turn_deadline:
-            await ctx.send("⏰ Your turn has expired! The duel will be marked as expired.")
-            return
-        
-        # Normalize spell name
-        spell_name = spell_name.lower().strip().replace(' ', '')
-        valid_spells = ['fireball', 'frostbolt', 'lightning', 'shield', 'heal', 'magicmissile']
-        
-        if spell_name not in valid_spells:
-            await ctx.send(f"❌ Unknown spell! Valid spells: Fireball, Frostbolt, Lightning, Shield, Heal, Magic Missile")
-            return
-        
-        # Record the spell for current player
-        if is_challenger:
-            user_duel.challenger_spell = spell_name
-        else:
-            user_duel.opponent_spell = spell_name
-        
-        # Update last action time
-        user_duel.last_action = datetime.now(timezone.utc)
-        
-        # Check if both players have cast spells for this round
-        if user_duel.challenger_spell and user_duel.opponent_spell:
-            # Both spells cast - reveal and resolve combat
-            await ctx.send(f"✨ {ctx.author.mention} casts their spell! Both players have cast - resolving combat...")
-            await resolve_combat_round(ctx, user_duel)
-        else:
-            # First spell cast - hide the spell choice
-            await ctx.send(f"✅ {ctx.author.display_name} has cast their spell!\n🔒 Spell choices will be revealed after both players cast.")
-            
-            # Switch turns and set new deadline
-            user_duel.current_turn = 'opponent' if is_challenger else 'challenger'
-            user_duel.turn_deadline = datetime.now(timezone.utc) + timedelta(hours=12)
-            
-            db.session.commit()
-            
-            # Notify next player
-            next_player = user_duel.opponent if is_challenger else user_duel.challenger
-            embed = create_duel_embed(
-                "⏳ Turn Switch - Spell Hidden",
-                f"**{next_player.username}**, it's your turn to cast a spell!",
-                discord.Color.orange()
-            )
-            embed.add_field(
-                name="❤️ Current HP",
-                value=f"**{user_duel.challenger.username}:** {user_duel.challenger_hp} HP {'❤️' * user_duel.challenger_hp}{'💔' * (3 - user_duel.challenger_hp)}\n**{user_duel.opponent.username}:** {user_duel.opponent_hp} HP {'❤️' * user_duel.opponent_hp}{'💔' * (3 - user_duel.opponent_hp)}",
-                inline=False
-            )
-            embed.add_field(
-                name="🔒 Spell Secrecy",
-                value="Your opponent has cast their spell, but it's hidden until you cast yours!",
-                inline=False
-            )
-            embed.add_field(
-                name="⏰ Time Limit",
-                value="You have **12 hours** to cast your spell!",
-                inline=False
-            )
-            
-            await ctx.send(embed=embed)
-    
-    async def resolve_combat_round(ctx, duel):
-        """Resolve a combat round between two spells"""
-        challenger_spell = duel.challenger_spell
-        opponent_spell = duel.opponent_spell
-        
-        # First reveal both spells before combat
-        spell_emojis = {
-            'fireball': '🔥', 'frostbolt': '❄️', 'lightning': '⚡',
-            'shield': '🛡️', 'heal': '✨', 'magicmissile': '💫'
-        }
-        
-        reveal_embed = create_duel_embed(
-            "🔓 Spells Revealed!",
-            "Both players have cast their spells:",
-            discord.Color.blue()
-        )
-        
-        reveal_embed.add_field(
-            name=f"{spell_emojis.get(challenger_spell, '✨')} {duel.challenger.username}",
-            value=f"**{challenger_spell.replace('magicmissile', 'Magic Missile').title()}**",
-            inline=True
-        )
-        reveal_embed.add_field(
-            name="VS",
-            value="⚔️",
-            inline=True
-        )
-        reveal_embed.add_field(
-            name=f"{spell_emojis.get(opponent_spell, '✨')} {duel.opponent.username}",
-            value=f"**{opponent_spell.replace('magicmissile', 'Magic Missile').title()}**",
-            inline=True
-        )
-        
-        await ctx.send(embed=reveal_embed)
-        
-        # Process combat using the utility function
-        combat_log, is_tie = process_combat_round(duel, challenger_spell, opponent_spell)
-        
-        # Create combat result embed
-        if is_tie:
-            embed = create_duel_embed(
-                "⚖️ Spells Clash - Tie Round!",
-                "\n".join(combat_log),
-                discord.Color.orange()
-            )
-        else:
-            embed = create_duel_embed(
-                "💥 Combat Round Results!",
-                "\n".join(combat_log),
-                discord.Color.gold()
-            )
-        
-        # Show current HP
-        embed.add_field(
-            name="❤️ Current HP",
-            value=f"**{duel.challenger.username}:** {duel.challenger_hp} HP {'❤️' * duel.challenger_hp}{'💔' * (3 - duel.challenger_hp)}\n**{duel.opponent.username}:** {duel.opponent_hp} HP {'❤️' * duel.opponent_hp}{'💔' * (3 - duel.opponent_hp)}",
-            inline=False
-        )
-        
-        # Check if duel is over (only if not a tie)
-        if not is_tie and (duel.challenger_hp <= 0 or duel.opponent_hp <= 0):
-            # Finish the duel
-            result = finish_duel(duel)
-            
-            if result['winner']:
-                embed.add_field(
-                    name="🏆 Victory!",
-                    value=f"**{result['winner'].username}** wins the duel!\n⏱️ Duration: {result['duration_minutes']} minutes",
-                    inline=False
-                )
-            else:
-                embed.add_field(
-                    name="🤝 Draw!",
-                    value=f"Both duelists fell simultaneously!\n⏱️ Duration: {result['duration_minutes']} minutes",
-                    inline=False
-                )
-        else:
-            # Continue the duel
-            if is_tie:
-                # On tie, both players cast again immediately - keep current turn structure
-                embed.add_field(
-                    name="🔄 Tie Round - Cast Again!",
-                    value=f"Both duelists must cast new spells!\n**{duel.challenger.username}** goes first, then **{duel.opponent.username}**",
-                    inline=False
-                )
-            else:
-                # Normal next round - challenger always goes first
-                embed.add_field(
-                    name="🔄 Next Round",
-                    value=f"**{duel.challenger.username}** goes first! 12 hours to cast.",
-                    inline=False
-                )
-            
-            # Reset turn to challenger for next round
-            duel.current_turn = 'challenger'
-            duel.turn_deadline = datetime.now(timezone.utc) + timedelta(hours=12)
-            db.session.commit()
-        
-        await ctx.send(embed=embed)
-    
-    @bot.command(name='duels')
-    async def active_duels_list(ctx):
-        """Show currently active HP-based duels with turn information"""
-        # Clean up expired duels first
-        cleanup_expired_duels()
-        
-        # Get active duels from database
-        active_duels_db = ActiveDuel.query.filter_by(status='active').all()
-        
-        if not active_duels_db:
-            await ctx.send("🕊️ No active duels right now. Challenge someone with `%duel @username`!")
-            return
-        
-        embed = create_duel_embed(
-            "⚔️ Active HP-Based Duels",
-            f"There are currently {len(active_duels_db)} active duels with 3 HP each:",
-            discord.Color.purple()
-        )
-        
-        for duel in active_duels_db:
-            # Calculate time remaining for current turn
-            current_time = datetime.now(timezone.utc)
-            time_remaining = duel.turn_deadline - current_time
-            hours_remaining = max(0, int(time_remaining.total_seconds() / 3600))
-            
-            # Determine whose turn it is
-            current_player = duel.challenger.username if duel.current_turn == 'challenger' else duel.opponent.username
-            
-            # HP display
-            challenger_hp = "❤️" * duel.challenger_hp + "💔" * (3 - duel.challenger_hp)
-            opponent_hp = "❤️" * duel.opponent_hp + "💔" * (3 - duel.opponent_hp)
-            
-            # Turn status
-            if hours_remaining > 0:
-                turn_info = f"**{current_player}'s turn** ({hours_remaining}h left)"
-            else:
-                turn_info = "⚠️ Turn expired"
-            
-            embed.add_field(
-                name=f"{duel.challenger.username} vs {duel.opponent.username}",
-                value=f"HP: {challenger_hp} vs {opponent_hp}\n{turn_info}",
-                inline=False
-            )
-        
-        await ctx.send(embed=embed)
-    
-    @bot.command(name='cancelduels')
-    async def cancel_duel(ctx):
-        """Cancel any active HP-based duels you're participating in"""
-        # Clean up expired duels
-        cleanup_expired_duels()
-        
-        # Find user's active duels
-        user_duels = ActiveDuel.query.filter(
-            ((ActiveDuel.challenger_id == ctx.author.id) | (ActiveDuel.opponent_id == ctx.author.id)) &
-            (ActiveDuel.status == 'active')
-        ).all()
-        
-        if not user_duels:
-            await ctx.send("❌ You're not currently in any active duels.")
-            return
-        
-        cancelled_count = 0
-        for duel in user_duels:
-            duel.status = 'cancelled'
-            cancelled_count += 1
-        
-        db.session.commit()
-        
-        await ctx.send(f"✅ Cancelled {cancelled_count} duel(s).")
-    
-    @bot.command(name='duelstats')
-    async def duel_stats(ctx, member: discord.Member = None):
-        """Show duel statistics for a player"""
-        target = member or ctx.author
-        stats = get_player_stats(target.id)
-        
-        if not stats:
-            await ctx.send(f"❌ {target.display_name} hasn't participated in any duels yet!")
-            return
-        
-        player = stats['player']
-        win_rate = stats['win_rate']
-        
-        embed = create_duel_embed(
-            f"📊 Duel Statistics - {player.username}",
-            "Complete duel performance overview",
-            discord.Color.blue()
-        )
-        
-        # Win/Loss record
-        embed.add_field(
-            name="🏆 Record",
-            value=f"**Wins:** {player.total_wins}\n**Losses:** {player.total_losses}\n**Draws:** {player.total_draws}",
-            inline=True
-        )
-        
-        # Win rate
-        embed.add_field(
-            name="📈 Performance",
-            value=f"**Win Rate:** {win_rate:.1f}%\n**Games Played:** {player.games_played}",
-            inline=True
-        )
-        
-        # Activity
-        embed.add_field(
-            name="📅 Activity",
-            value=f"**Joined:** {player.created_at.strftime('%b %d, %Y')}\n**Last Active:** {player.last_active.strftime('%b %d, %Y')}",
-            inline=True
-        )
-        
-        await ctx.send(embed=embed)
-    
-    @bot.command(name='spells')
-    async def spell_guide(ctx):
-        """Display all available spells and their strategic relationships"""
-        embed = discord.Embed(
-            title="📚 Spell Guide - Strategic Combat System",
-            description="Learn about all available spells and their effectiveness against each other!",
-            color=discord.Color.purple()
-        )
-        
-        # Spell descriptions with strategic info
-        spells_info = [
-            ("🔥 **Fireball**", "A blazing projectile of pure flame.\n**Beats:** Frostbolt, Heal\n**Loses to:** Shield, Lightning"),
-            ("❄️ **Frostbolt**", "An icy shard that freezes enemies.\n**Beats:** Lightning, Magic Missile\n**Loses to:** Fireball, Heal"),
-            ("⚡ **Lightning**", "A crackling bolt of electricity.\n**Beats:** Fireball, Shield\n**Loses to:** Frostbolt, Magic Missile"),
-            ("🛡️ **Shield**", "A protective magical barrier.\n**Beats:** Magic Missile, Fireball\n**Loses to:** Lightning, Heal"),
-            ("✨ **Heal**", "Restorative magic that counters damage.\n**Beats:** Shield, Frostbolt\n**Loses to:** Fireball, Magic Missile"),
-            ("💫 **Magic Missile**", "Unerring arcane projectiles.\n**Beats:** Heal, Lightning\n**Loses to:** Shield, Frostbolt")
-        ]
-        
-        for spell_name, spell_desc in spells_info:
-            embed.add_field(
-                name=spell_name,
-                value=spell_desc,
-                inline=True
-            )
-        
-        embed.add_field(
-            name="🎯 Strategic Tips",
-            value=(
-                "• Each spell beats 2 others and loses to 2 others\n"
-                "• Spells are hidden until both players cast\n"
-                "• Ties result in another spell cast - no random winners!\n"
-                "• Choose wisely in each round!\n"
-                "• HP-based combat: 3 HP each, first to 0 HP loses!\n"
-                "• Turn-based: 12 hours per turn for casual play"
-            ),
-            inline=False
-        )
-        
-        embed.add_field(
-            name="⚔️ How to Duel",
-            value=(
-                "`%duel @user` - Start an HP-based duel (3 HP each)\n"
-                "`%cast <spell>` - Cast on your turn (12h time limit)\n"
-                "`%duels` - View active duels with HP and turns\n"
-                "`%duelstats` - Check your win/loss record\n"
-                "`%cancelduels` - Cancel if you need to back out"
-            ),
-            inline=False
-        )
-        
-        embed.set_footer(text="May your spells be ever in your favor!")
         await ctx.send(embed=embed)
     
     # ---------------- AUTOMATIC RESPONSES ----------------
@@ -1254,3 +706,43 @@ async def setup_commands(bot):
             await ctx.send("❌ An unexpected error occurred while executing the command.")
     
     print("✅ Commands loaded successfully!")
+
+# Bot setup
+intents = discord.Intents.default()
+intents.message_content = True
+bot = commands.Bot(command_prefix='%', intents=intents)
+
+# Store start time for uptime calculation
+bot.start_time = time.time()
+
+# Event handlers
+@bot.event
+async def on_ready():
+    print(f'{bot.user} has connected to Discord!')
+    await bot.change_presence(activity=discord.Game(name="Type %helpme"))
+    
+    # Setup commands and start scheduler
+    await setup_commands(bot)
+    bot.monthly_scheduler.start()
+
+@bot.event
+async def on_reaction_add(reaction, user):
+    """Handle reaction-based signups"""
+    global signups
+    
+    # Skip bot reactions
+    if user.bot:
+        return
+    
+    # Check if this is the signup message
+    if reaction.message.id == signup_message_id and str(reaction.emoji) == "🐼":
+        signups.add(user.id)
+        print(f"✅ {user.name} signed up for training matches")
+
+# Run the bot
+if __name__ == "__main__":
+    token = os.getenv('DISCORD_TOKEN')
+    if not token:
+        print("❌ DISCORD_TOKEN environment variable not set!")
+        exit(1)
+    bot.run(token)
