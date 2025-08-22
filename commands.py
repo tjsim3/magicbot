@@ -11,6 +11,14 @@ import re
 signup_message_id = None
 signups = set()
 
+# Bot setup - MOVE THIS TO THE TOP AND REMOVE THE DUPLICATE AT BOTTOM
+intents = discord.Intents.default()
+intents.message_content = True
+bot = commands.Bot(command_prefix='%', intents=intents)
+
+# Store start time for uptime calculation
+bot.start_time = time.time()
+
 # Helper functions
 def format_uptime(seconds):
     """Format uptime seconds into human readable string"""
@@ -331,7 +339,7 @@ async def setup_commands(bot):
                 "`%ping` - Check bot latency\n"
                 "`%info` - Show bot information\n"
                 "`%server` - Show server information\n"
-                "`%help` - Show this help message"
+                "`%help` - Show this help message\n"
                 "`%emojis` - Add emojis to channel name (Spellkeepers Only)"
             ),
             inline=False
@@ -710,16 +718,19 @@ async def setup_commands(bot):
     # ---------------- AUTOMATED MONTHLY SCHEDULER ----------------
     @tasks.loop(hours=24)
     async def monthly_scheduler():
-        now = datetime.utcnow().date()
-        weekday = now.weekday()  # Monday=0, Tuesday=1, ... Sunday=6
+        try:
+            now = datetime.utcnow().date()
+            weekday = now.weekday()  # Monday=0, Tuesday=1, ... Sunday=6
 
-        # First Monday of the month
-        if weekday == 0 and 1 <= now.day <= 7:
-            await post_signup_message()
+            # First Monday of the month
+            if weekday == 0 and 1 <= now.day <= 7:
+                await post_signup_message()
 
-        # Wednesday after first Monday
-        if weekday == 2 and 8 <= now.day <= 14:
-            await assign_matches()
+            # Wednesday after first Monday
+            if weekday == 2 and 8 <= now.day <= 14:
+                await assign_matches()
+        except Exception as e:
+            print(f"❌ Error in monthly scheduler: {e}")
     
     # Store scheduler task in bot for access from events
     bot.monthly_scheduler = monthly_scheduler
@@ -747,28 +758,24 @@ async def setup_commands(bot):
     
     print("✅ Commands loaded successfully!")
 
-# Bot setup
-intents = discord.Intents.default()
-intents.message_content = True
-bot = commands.Bot(command_prefix='%', intents=intents)
-
-# Store start time for uptime calculation
-bot.start_time = time.time()
-
 # Event handlers
 @bot.event
 async def on_ready():
     print(f'{bot.user} has connected to Discord!')
     await bot.change_presence(
-    activity=discord.Activity(
-        type=discord.ActivityType.watching,  
-        name="%help"  
+        activity=discord.Activity(
+            type=discord.ActivityType.watching,  
+            name="%help"  
+        )
     )
-)
     
     # Setup commands and start scheduler
     await setup_commands(bot)
-    bot.monthly_scheduler.start()
+    try:
+        bot.monthly_scheduler.start()
+        print("✅ Monthly scheduler started")
+    except Exception as e:
+        print(f"❌ Failed to start scheduler: {e}")
 
 @bot.event
 async def on_reaction_add(reaction, user):
@@ -790,4 +797,10 @@ if __name__ == "__main__":
     if not token:
         print("❌ DISCORD_TOKEN environment variable not set!")
         exit(1)
-    bot.run(token)
+    
+    # Add error handling for bot run
+    try:
+        bot.run(token)
+    except Exception as e:
+        print(f"❌ Bot crashed with error: {e}")
+        exit(1)
