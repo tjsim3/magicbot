@@ -15,6 +15,7 @@ signups = set()
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix='%', intents=intents)
+bot.help_command = None
 
 # Store start time for uptime calculation
 bot.start_time = time.time()
