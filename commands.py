@@ -243,9 +243,9 @@ async def setup_commands(bot):
         await ctx.send(f"✅ Command prefix changed to `{new_prefix}`")
         await ctx.send(f"💡 Note: This change is temporary. To make it permanent, update the code.")
 
-@bot.command(name='initiate')
-@is_high_mage()  # Uses your existing High Mage check
-async def initiate_member(ctx, member: discord.Member, path: str):
+    @bot.command(name='initiate')
+    @is_high_mage()  # Uses your existing High Mage check
+    async def initiate_member(ctx, member: discord.Member, path: str):
     """
     Add Spellkeeper role and assign either Warlocks or Sorcerers path.
     Usage: %initiate @Member warlocks  OR  %initiate @Member sorcerers
