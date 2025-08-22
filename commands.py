@@ -181,6 +181,33 @@ async def setup_commands(bot):
                 return False
             return True
         return commands.check(predicate)
+
+    @bot.command(name='server')
+    @is_high_mage()
+    async def server_info(ctx):
+        """Display server information"""
+        if ctx.guild is None:
+            await ctx.send("❌ This command can only be used in a server!")
+            return
+        
+        guild = ctx.guild
+        embed = discord.Embed(
+            title=f"📊 {guild.name} Information",
+            color=discord.Color.purple()
+        )
+        
+        # Server stats
+        embed.add_field(name="Owner", value=guild.owner.mention, inline=True)
+        embed.add_field(name="Members", value=guild.member_count, inline=True)
+        embed.add_field(name="Created", value=guild.created_at.strftime("%B %d, %Y"), inline=True)
+        embed.add_field(name="Text Channels", value=f"{len(guild.text_channels)}", inline=True)
+        embed.add_field(name="Voice Channels", value=f"{len(guild.voice_channels)}", inline=True)
+        embed.add_field(name="Roles", value=f"{len(guild.roles)}", inline=True)
+        
+        if guild.icon:
+            embed.set_thumbnail(url=guild.icon.url)
+        
+        await ctx.send(embed=embed)
     
     @bot.command()
     @is_high_mage()
@@ -215,6 +242,87 @@ async def setup_commands(bot):
         bot.command_prefix = new_prefix
         await ctx.send(f"✅ Command prefix changed to `{new_prefix}`")
         await ctx.send(f"💡 Note: This change is temporary. To make it permanent, update the code.")
+
+    @bot.command(name="helpmeleader")
+    async def helpme(ctx):
+        """Show bot commands and usage"""
+        embed = discord.Embed(
+            title="📜 Bot Commands for the High Mages",
+            description="Here are all available commands, glorious sorcerer:",
+            color=discord.Color.blue()
+        )
+        
+        # Training commands
+        embed.add_field(
+            name="🗡️ Training Match System",
+            value=(
+                "`%signupcount` - Show current signup count\n"
+                "`%testsignup` - Post signup message (High Mage only)\n"
+                "`%testmatches` - Assign matches (High Mage only)\n"
+                "`%clearsignups` - Clear all signups (High Mage only)"
+            ),
+            inline=False
+        )
+        
+        # High Mage admin commands
+        user_roles = [role.name.lower() for role in ctx.author.roles] if ctx.guild else []
+        if 'high mage' in user_roles:
+            embed.add_field(
+                name="⚔️ High Mage Commands",
+                value=(
+                    "`%setprefix <prefix>` - Change command prefix\n"
+                    "`%serverstats` - Detailed server statistics"
+                ),
+                inline=False
+            )
+        
+        # Reminder commands  
+        embed.add_field(
+            name="⏰ Reminder System",
+            value=(
+                "`%remindme <minutes> <message>` - Set reminder (max 7 days)\n"
+                "`%remindat <YYYY-MM-DD> <HH:MM> <message>` - Schedule reminder (UTC)"
+            ),
+            inline=False
+        )
+        
+        # General commands
+        embed.add_field(
+            name="🤖 General Commands",
+            value=(
+                "`%ping` - Check bot latency\n"
+                "`%info` - Show bot information\n"
+                "`%server` - Show server information\n"
+                "`%helpme` - Show this help message"
+            ),
+            inline=False
+        )
+        
+        # Fun commands
+        embed.add_field(
+            name="🎲 Fun Commands",
+            value=(
+                "`%roll [dice]` - Roll dice (e.g., %roll 2d6)\n"
+                "`%flip` - Flip a coin\n"
+                "`%8ball <question>` - Ask the magic 8-ball\n"
+                "`%quote` - Get an inspirational quote\n"
+                "`%choose <options>` - Choose between options"
+            ),
+            inline=False
+        )
+        
+        # User commands
+        embed.add_field(
+            name="👤 User Commands",
+            value=(
+                "`%whois [@user]` - Show user information\n"
+                "`%avatar [@user]` - Show user's avatar"
+            ),
+            inline=False
+        )
+        
+        embed.set_footer(text="Training signups happen automatically on the first Monday of each month!")
+        await ctx.send(embed=embed)
     
     @bot.command()
     @is_high_mage()
@@ -290,30 +398,6 @@ async def setup_commands(bot):
             color=discord.Color.blue()
         )
         
-        # Training commands
-        embed.add_field(
-            name="🗡️ Training Match System",
-            value=(
-                "`%signupcount` - Show current signup count\n"
-                "`%testsignup` - Post signup message (High Mage only)\n"
-                "`%testmatches` - Assign matches (High Mage only)\n"
-                "`%clearsignups` - Clear all signups (High Mage only)"
-            ),
-            inline=False
-        )
-        
-        # High Mage admin commands
-        user_roles = [role.name.lower() for role in ctx.author.roles] if ctx.guild else []
-        if 'high mage' in user_roles:
-            embed.add_field(
-                name="⚔️ High Mage Commands",
-                value=(
-                    "`%setprefix <prefix>` - Change command prefix\n"
-                    "`%serverstats` - Detailed server statistics"
-                ),
-                inline=False
-            )
-        
         # Reminder commands  
         embed.add_field(
             name="⏰ Reminder System",
@@ -328,9 +412,7 @@ async def setup_commands(bot):
         embed.add_field(
             name="🤖 General Commands",
             value=(
-                "`%ping` - Check bot latency\n"
                 "`%info` - Show bot information\n"
-                "`%server` - Show server information\n"
                 "`%helpme` - Show this help message"
             ),
             inline=False
@@ -474,31 +556,7 @@ async def setup_commands(bot):
         
         await ctx.send(embed=embed)
     
-    @bot.command(name='server')
-    async def server_info(ctx):
-        """Display server information"""
-        if ctx.guild is None:
-            await ctx.send("❌ This command can only be used in a server!")
-            return
-        
-        guild = ctx.guild
-        embed = discord.Embed(
-            title=f"📊 {guild.name} Information",
-            color=discord.Color.purple()
-        )
-        
-        # Server stats
-        embed.add_field(name="Owner", value=guild.owner.mention, inline=True)
-        embed.add_field(name="Members", value=guild.member_count, inline=True)
-        embed.add_field(name="Created", value=guild.created_at.strftime("%B %d, %Y"), inline=True)
-        embed.add_field(name="Text Channels", value=f"{len(guild.text_channels)}", inline=True)
-        embed.add_field(name="Voice Channels", value=f"{len(guild.voice_channels)}", inline=True)
-        embed.add_field(name="Roles", value=f"{len(guild.roles)}", inline=True)
-        
-        if guild.icon:
-            embed.set_thumbnail(url=guild.icon.url)
-        
-        await ctx.send(embed=embed)
+
     
     # ---------------- FUN COMMANDS ----------------
     @bot.command(name='roll')
