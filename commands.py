@@ -244,6 +244,7 @@ async def setup_commands(bot):
         await ctx.send(f"💡 Note: This change is temporary. To make it permanent, update the code.")
 
     @bot.command(name="helpmeleader")
+    @is_high_mage()
     async def helpme(ctx):
         """Show bot commands and usage"""
         embed = discord.Embed(
