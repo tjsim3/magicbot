@@ -373,78 +373,78 @@ async def setup_commands(bot):
         )
         await ctx.send(embed=embed)
 
-@bot.command(name='emojis')
-async def emojis_command(ctx, emoji1: str, emoji2: str, emoji3: str = None, emoji4: str = None):
-    """
-    Replace emojis at the beginning of the channel name.
-    Usage: %emojis 😊 👍 [optional_emoji3] [optional_emoji4]
-    """
-    print(f"🎯 Emojis command called by {ctx.author} with args: {emoji1}, {emoji2}, {emoji3}, {emoji4}")
-    
-    # Check if user has Spellkeeper role (exact match since it's capitalized)
-    spellkeeper_role = discord.utils.get(ctx.author.roles, name="Spellkeeper")
-    
-    if not spellkeeper_role:
-        # Debug: list all roles the user has
-        user_roles = [role.name for role in ctx.author.roles]
-        print(f"❌ User roles: {user_roles}")
-        await ctx.send("❌ You need the **Spellkeeper** role to use this command!")
-        return
-    
-    print(f"✅ User has Spellkeeper role: {spellkeeper_role}")
-    
-    # Get all emojis provided (filter out None values)
-    new_emojis = [emoji for emoji in [emoji1, emoji2, emoji3, emoji4] if emoji is not None]
-    print(f"📝 New emojis to add: {new_emojis}")
-    
-    # Remove any existing emojis from the beginning of the channel name
-    current_name = ctx.channel.name
-    print(f"📋 Current channel name: '{current_name}'")
-    
-    # Regex to match emojis at the start (including custom emojis)
-    cleaned_name = re.sub(r'^(\s*<a?:[a-zA-Z0-9_]+:[0-9]+>\s*|\s*[^\w\s]\s*)+', '', current_name)
-    cleaned_name = cleaned_name.strip()
-    print(f"🧹 Cleaned name: '{cleaned_name}'")
-    
-    # Combine new emojis with cleaned channel name
-    emoji_string = ' '.join(new_emojis)
-    new_channel_name = f"{emoji_string} {cleaned_name}".strip()
-    print(f"🆕 New channel name: '{new_channel_name}' (length: {len(new_channel_name)})")
-    
-    # Discord channel name limit is 100 characters
-    if len(new_channel_name) > 100:
-        await ctx.send("❌ The new channel name is too long! Maximum 100 characters.")
-        return
-    
-    try:
-        # Double-check bot permissions
-        bot_perms = ctx.channel.permissions_for(ctx.guild.me)
-        print(f"🔐 Bot permissions: Manage_Channels={bot_perms.manage_channels}, Administrator={bot_perms.administrator}")
+    @bot.command(name='emojis')
+    async def emojis_command(ctx, emoji1: str, emoji2: str, emoji3: str = None, emoji4: str = None):
+        """
+        Replace emojis at the beginning of the channel name.
+        Usage: %emojis 😊 👍 [optional_emoji3] [optional_emoji4]
+        """
+        print(f"🎯 Emojis command called by {ctx.author} with args: {emoji1}, {emoji2}, {emoji3}, {emoji4}")
         
-        if not (bot_perms.manage_channels or bot_perms.administrator):
-            await ctx.send("❌ I don't have permission to edit this channel!")
+        # Check if user has Spellkeeper role (exact match since it's capitalized)
+        spellkeeper_role = discord.utils.get(ctx.author.roles, name="Spellkeeper")
+        
+        if not spellkeeper_role:
+            # Debug: list all roles the user has
+            user_roles = [role.name for role in ctx.author.roles]
+            print(f"❌ User roles: {user_roles}")
+            await ctx.send("❌ You need the **Spellkeeper** role to use this command!")
             return
         
-        # Try to update the channel
-        print("🔄 Attempting to update channel name...")
-        await ctx.channel.edit(name=new_channel_name)
-        await ctx.send(f"✅ Channel emojis updated to: {emoji_string}")
-        print(f"🎉 Successfully updated channel name to: '{new_channel_name}'")
+        print(f"✅ User has Spellkeeper role: {spellkeeper_role}")
         
-    except discord.Forbidden:
-        error_msg = "❌ I don't have permission to edit this channel! (Forbidden)"
-        print(error_msg)
-        await ctx.send(error_msg)
-    except discord.HTTPException as e:
-        error_msg = f"❌ Failed to update channel: {e}"
-        print(error_msg)
-        print(f"🚨 Full error details: {repr(e)}")
-        await ctx.send("❌ Failed to update channel. Check console for details.")
-    except Exception as e:
-        error_msg = f"❌ Unexpected error: {e}"
-        print(error_msg)
-        print(f"🚨 Unexpected error details: {repr(e)}")
-        await ctx.send("❌ An unexpected error occurred. Check console for details.")
+        # Get all emojis provided (filter out None values)
+        new_emojis = [emoji for emoji in [emoji1, emoji2, emoji3, emoji4] if emoji is not None]
+        print(f"📝 New emojis to add: {new_emojis}")
+        
+        # Remove any existing emojis from the beginning of the channel name
+        current_name = ctx.channel.name
+        print(f"📋 Current channel name: '{current_name}'")
+        
+        # Regex to match emojis at the start (including custom emojis)
+        cleaned_name = re.sub(r'^(\s*<a?:[a-zA-Z0-9_]+:[0-9]+>\s*|\s*[^\w\s]\s*)+', '', current_name)
+        cleaned_name = cleaned_name.strip()
+        print(f"🧹 Cleaned name: '{cleaned_name}'")
+        
+        # Combine new emojis with cleaned channel name
+        emoji_string = ' '.join(new_emojis)
+        new_channel_name = f"{emoji_string} {cleaned_name}".strip()
+        print(f"🆕 New channel name: '{new_channel_name}' (length: {len(new_channel_name)})")
+        
+        # Discord channel name limit is 100 characters
+        if len(new_channel_name) > 100:
+            await ctx.send("❌ The new channel name is too long! Maximum 100 characters.")
+            return
+        
+        try:
+            # Double-check bot permissions
+            bot_perms = ctx.channel.permissions_for(ctx.guild.me)
+            print(f"🔐 Bot permissions: Manage_Channels={bot_perms.manage_channels}, Administrator={bot_perms.administrator}")
+            
+            if not (bot_perms.manage_channels or bot_perms.administrator):
+                await ctx.send("❌ I don't have permission to edit this channel!")
+                return
+            
+            # Try to update the channel
+            print("🔄 Attempting to update channel name...")
+            await ctx.channel.edit(name=new_channel_name)
+            await ctx.send(f"✅ Channel emojis updated to: {emoji_string}")
+            print(f"🎉 Successfully updated channel name to: '{new_channel_name}'")
+            
+        except discord.Forbidden:
+            error_msg = "❌ I don't have permission to edit this channel! (Forbidden)"
+            print(error_msg)
+            await ctx.send(error_msg)
+        except discord.HTTPException as e:
+            error_msg = f"❌ Failed to update channel: {e}"
+            print(error_msg)
+            print(f"🚨 Full error details: {repr(e)}")
+            await ctx.send("❌ Failed to update channel. Check console for details.")
+        except Exception as e:
+            error_msg = f"❌ Unexpected error: {e}"
+            print(error_msg)
+            print(f"🚨 Unexpected error details: {repr(e)}")
+            await ctx.send("❌ An unexpected error occurred. Check console for details.")
         
     @bot.command(name='info')
     async def bot_info(ctx):
