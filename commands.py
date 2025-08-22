@@ -5,6 +5,7 @@ import asyncio
 import random
 import os
 import time
+import re
 
 # Global variables for signup system (in-memory only)
 signup_message_id = None
@@ -280,8 +281,8 @@ async def setup_commands(bot):
         await ctx.send(f"📊 Current signups: **{len(signups)}** players")
 
     # ---------------- HELP COMMAND ----------------
-    @bot.command(name="helpme")
-    async def helpme(ctx):
+    @bot.command(name="help")
+    async def help(ctx):
         """Show bot commands and usage"""
         embed = discord.Embed(
             title="📜 Bot Commands",
@@ -330,7 +331,8 @@ async def setup_commands(bot):
                 "`%ping` - Check bot latency\n"
                 "`%info` - Show bot information\n"
                 "`%server` - Show server information\n"
-                "`%helpme` - Show this help message"
+                "`%help` - Show this help message"
+                "`%emojis` - Add emojis to channel name (Spellkeepers Only)"
             ),
             inline=False
         )
@@ -595,42 +597,42 @@ async def setup_commands(bot):
         await ctx.send(embed=embed)
 
     @bot.command(name='emojis')
-        async def emojis_command(ctx, emoji1: str, emoji2: str, emoji3: str = None, emoji4: str = None):
-            """
-            Replace emojis at the beginning of the channel name.
-            Usage: %emojis 😊 👍 [optional_emoji3] [optional_emoji4]
-            """
-            # Check if user has @spellkeeper role
-            spellkeeper_role = discord.utils.get(ctx.author.roles, name="spellkeeper")
-            if not spellkeeper_role:
-                await ctx.send("❌ You need the @spellkeeper role to use this command!")
-                return
-            
-            # Get all emojis provided (filter out None values)
-            new_emojis = [emoji for emoji in [emoji1, emoji2, emoji3, emoji4] if emoji is not None]
-            
-            # Remove any existing emojis from the beginning of the channel name
-            current_name = ctx.channel.name
-            # Regex to match emojis at the start (including custom emojis)
-            cleaned_name = re.sub(r'^(\s*<a?:[a-zA-Z0-9_]+:[0-9]+>\s*|\s*[^\w\s]\s*)+', '', current_name)
-            cleaned_name = cleaned_name.strip()
-            
-            # Combine new emojis with cleaned channel name
-            emoji_string = ' '.join(new_emojis)
-            new_channel_name = f"{emoji_string} {cleaned_name}".strip()
-            
-            # Discord channel name limit is 100 characters
-            if len(new_channel_name) > 100:
-                await ctx.send("❌ The new channel name is too long! Maximum 100 characters.")
-                return
-            
-            try:
-                await ctx.channel.edit(name=new_channel_name)
-                await ctx.send(f"✅ Channel emojis updated to: {emoji_string}")
-            except discord.Forbidden:
-                await ctx.send("❌ I don't have permission to edit this channel!")
-            except discord.HTTPException as e:
-                await ctx.send(f"❌ Failed to update channel: {e}")
+    async def emojis_command(ctx, emoji1: str, emoji2: str, emoji3: str = None, emoji4: str = None):
+        """
+        Replace emojis at the beginning of the channel name.
+        Usage: %emojis 😊 👍 [optional_emoji3] [optional_emoji4]
+        """
+        # Check if user has @spellkeeper role
+        spellkeeper_role = discord.utils.get(ctx.author.roles, name="spellkeeper")
+        if not spellkeeper_role:
+            await ctx.send("❌ You need the @spellkeeper role to use this command!")
+            return
+        
+        # Get all emojis provided (filter out None values)
+        new_emojis = [emoji for emoji in [emoji1, emoji2, emoji3, emoji4] if emoji is not None]
+        
+        # Remove any existing emojis from the beginning of the channel name
+        current_name = ctx.channel.name
+        # Regex to match emojis at the start (including custom emojis)
+        cleaned_name = re.sub(r'^(\s*<a?:[a-zA-Z0-9_]+:[0-9]+>\s*|\s*[^\w\s]\s*)+', '', current_name)
+        cleaned_name = cleaned_name.strip()
+        
+        # Combine new emojis with cleaned channel name
+        emoji_string = ' '.join(new_emojis)
+        new_channel_name = f"{emoji_string} {cleaned_name}".strip()
+        
+        # Discord channel name limit is 100 characters
+        if len(new_channel_name) > 100:
+            await ctx.send("❌ The new channel name is too long! Maximum 100 characters.")
+            return
+        
+        try:
+            await ctx.channel.edit(name=new_channel_name)
+            await ctx.send(f"✅ Channel emojis updated to: {emoji_string}")
+        except discord.Forbidden:
+            await ctx.send("❌ I don't have permission to edit this channel!")
+        except discord.HTTPException as e:
+            await ctx.send(f"❌ Failed to update channel: {e}")
     
     @bot.command(name='avatar')
     async def show_avatar(ctx, member: discord.Member = None):
@@ -727,9 +729,9 @@ async def setup_commands(bot):
     async def on_command_error(ctx, error):
         """Handle command errors"""
         if isinstance(error, commands.CommandNotFound):
-            await ctx.send("❌ Command not found. Use `%helpme` to see available commands.")
+            await ctx.send("❌ Command not found. Use `%help` to see available commands.")
         elif isinstance(error, commands.MissingRequiredArgument):
-            await ctx.send(f"❌ Missing required argument. Use `%helpme` for usage information.")
+            await ctx.send(f"❌ Missing required argument. Use `%help` for usage information.")
         elif isinstance(error, commands.BadArgument):
             await ctx.send("❌ Invalid argument provided. Please check the command usage.")
         elif isinstance(error, commands.CommandOnCooldown):
@@ -760,7 +762,7 @@ async def on_ready():
     await bot.change_presence(
     activity=discord.Activity(
         type=discord.ActivityType.watching,  
-        name="%helpme"  
+        name="%help"  
     )
 )
     
