@@ -5,6 +5,7 @@ import asyncio
 import random
 import os
 import time
+import re
 
 # Global variables for signup system (in-memory only)
 signup_message_id = None
