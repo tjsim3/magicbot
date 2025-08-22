@@ -380,9 +380,9 @@ async def setup_commands(bot):
         Usage: %emojis 😊 👍 [optional_emoji3] [optional_emoji4]
         """
         # Check if user has @spellkeeper role
-        spellkeeper_role = discord.utils.get(ctx.author.roles, name="spellkeeper")
+        spellkeeper_role = discord.utils.get(ctx.author.roles, name="Spellkeeper")
         if not spellkeeper_role:
-            await ctx.send("❌ You need the @spellkeeper role to use this command!")
+            await ctx.send("❌ You need the spellkeeper role to use this command!")
             return
         
         # Get all emojis provided (filter out None values)
