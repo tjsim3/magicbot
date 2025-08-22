@@ -719,7 +719,7 @@ bot.start_time = time.time()
 @bot.event
 async def on_ready():
     print(f'{bot.user} has connected to Discord!')
-    await bot.change_presence(activity=discord.Game(name="Type %helpme"))
+    await bot.change_presence(activity=discord.Game(name="Type %help"))
     
     # Setup commands and start scheduler
     await setup_commands(bot)
