@@ -373,7 +373,7 @@ async def setup_commands(bot):
         )
         await ctx.send(embed=embed)
 
-    @bot.command(name='emojis')
+    @bot.command(name='setemojis')
     async def emojis_command(ctx, emoji1: str, emoji2: str, emoji3: str = None, emoji4: str = None):
         """
         Replace emojis at the beginning of the channel name.
