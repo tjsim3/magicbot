@@ -374,7 +374,7 @@ async def setup_commands(bot):
         await ctx.send(embed=embed)
 
     @bot.command(name='emojis')
-async def emojis_command(ctx, emoji1: str, emoji2: str, emoji3: str = None, emoji4: str = None):
+    async def emojis_command(ctx, emoji1: str, emoji2: str, emoji3: str = None, emoji4: str = None):
     """Simple test version of emojis command"""
     try:
         print("🟢 Emojis command started")
