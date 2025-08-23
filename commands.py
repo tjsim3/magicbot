@@ -538,7 +538,7 @@ async def setup_commands(bot):
         print(f"🧹 Cleaned name: '{cleaned_name}'")
         
         # Combine new emojis with cleaned channel name
-        emoji_string = ' '.join(new_emojis)
+        emoji_string = ''.join(new_emojis)
         new_channel_name = f"{emoji_string} {cleaned_name}".strip()
         print(f"🆕 New channel name: '{new_channel_name}' (length: {len(new_channel_name)})")
         
