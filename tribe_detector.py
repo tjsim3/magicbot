@@ -281,12 +281,16 @@ def detect_tribes_for_discord(map_name: str, game_size: str, max_tribe_points: i
         # Show top combinations
         for i, (combo, total_points) in enumerate(combinations[:8], 1):
             tribe_details = []
-            for tribe in combo:
+            for j, tribe in enumerate(combo):
                 points = tribe_points.get(tribe, 0)
                 base_score = TRIBE_STARTING_SCORES.get(tribe, "?")
-                # Check if this is a corner spawn (actual score would be base_score - 5)
-                is_corner = any(score == base_score - 5 for score in enemy_scores)
+                
+                # CORRECT corner spawn detection:
+                # If the observed score is exactly 5 less than the tribe's base score, it's a corner spawn
+                observed_score = enemy_scores[j]
+                is_corner = (observed_score == base_score - 5)
                 corner_note = " (corner spawn)" if is_corner else ""
+                
                 tribe_details.append(f"{tribe.title()}{corner_note} ({points} points)")
             
             result.append(f"**Possibility {i}:** {', '.join(tribe_details)}")
@@ -418,6 +422,7 @@ except ValueError as e:
 
 
 # %%
+
 
 
 
