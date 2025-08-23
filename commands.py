@@ -689,7 +689,7 @@ async def setup_commands(bot):
     async def inspirational_quote(ctx):
         """Get an inspirational quote"""
         quotes = [
-             quotes = [
+            
             ("The only way to do great work is to love what you do.", "Steve Jobs"),
             ("Magic is believing in yourself. If you can do that, you can make anything happen.", "Johann Wolfgang von Goethe"),
             ("The real magic happens when you start believing in yourself.", "Unknown"),
