@@ -246,49 +246,49 @@ async def setup_commands(bot):
     @bot.command(name='initiate')
     @is_high_mage()  # Uses your existing High Mage check
     async def initiate_member(ctx, member: discord.Member, path: str):
-    """
-    Add Spellkeeper role and assign either Warlocks or Sorcerers path.
-    Usage: %initiate @Member warlocks  OR  %initiate @Member sorcerers
-    """
-    try:
-        # Get the roles
-        spellkeeper_role = discord.utils.get(ctx.guild.roles, name="Spellkeeper")
-        warlocks_role = discord.utils.get(ctx.guild.roles, name="Warlocks")
-        sorcerers_role = discord.utils.get(ctx.guild.roles, name="Sorcerers")
-        
-        # Check if roles exist
-        if not spellkeeper_role:
-            await ctx.send("❌ Spellkeeper role not found!")
-            return
-        
-        path = path.lower()
-        if path == "warlocks" and not warlocks_role:
-            await ctx.send("❌ Warlocks role not found!")
-            return
-        elif path == "sorcerers" and not sorcerers_role:
-            await ctx.send("❌ Sorcerers role not found!")
-            return
-        elif path not in ["warlocks", "sorcerers"]:
-            await ctx.send("❌ Path must be either 'warlocks' or 'sorcerers'!")
-            return
-        
-        # Add roles to member
-        roles_to_add = [spellkeeper_role]
-        if path == "warlocks" and warlocks_role:
-            roles_to_add.append(warlocks_role)
-        elif path == "sorcerers" and sorcerers_role:
-            roles_to_add.append(sorcerers_role)
-        
-        await member.add_roles(*roles_to_add)
-        
-        await ctx.send(f"✅ {member.mention} has been initiated as a Spellkeeper on the {path.title()} path!")
-        
-    except discord.Forbidden:
-        await ctx.send("❌ I don't have permission to manage roles!")
-    except discord.HTTPException as e:
-        await ctx.send(f"❌ Failed to add roles: {e}")
-    except Exception as e:
-        await ctx.send(f"❌ Unexpected error: {e}")
+        """
+        Add Spellkeeper role and assign either Warlocks or Sorcerers path.
+        Usage: %initiate @Member warlocks  OR  %initiate @Member sorcerers
+        """
+        try:
+            # Get the roles
+            spellkeeper_role = discord.utils.get(ctx.guild.roles, name="Spellkeeper")
+            warlocks_role = discord.utils.get(ctx.guild.roles, name="Warlocks")
+            sorcerers_role = discord.utils.get(ctx.guild.roles, name="Sorcerers")
+            
+            # Check if roles exist
+            if not spellkeeper_role:
+                await ctx.send("❌ Spellkeeper role not found!")
+                return
+            
+            path = path.lower()
+            if path == "warlocks" and not warlocks_role:
+                await ctx.send("❌ Warlocks role not found!")
+                return
+            elif path == "sorcerers" and not sorcerers_role:
+                await ctx.send("❌ Sorcerers role not found!")
+                return
+            elif path not in ["warlocks", "sorcerers"]:
+                await ctx.send("❌ Path must be either 'warlocks' or 'sorcerers'!")
+                return
+            
+            # Add roles to member
+            roles_to_add = [spellkeeper_role]
+            if path == "warlocks" and warlocks_role:
+                roles_to_add.append(warlocks_role)
+            elif path == "sorcerers" and sorcerers_role:
+                roles_to_add.append(sorcerers_role)
+            
+            await member.add_roles(*roles_to_add)
+            
+            await ctx.send(f"✅ {member.mention} has been initiated as a Spellkeeper on the {path.title()} path!")
+            
+        except discord.Forbidden:
+            await ctx.send("❌ I don't have permission to manage roles!")
+        except discord.HTTPException as e:
+            await ctx.send(f"❌ Failed to add roles: {e}")
+        except Exception as e:
+            await ctx.send(f"❌ Unexpected error: {e}")
 
     @bot.command(name="helpmeleader")
     @is_high_mage()
