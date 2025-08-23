@@ -6,6 +6,7 @@ import random
 import os
 import time
 import re
+from tribe_detector import detect_tribes_for_discord
 
 # Global variables for signup system (in-memory only)
 signup_message_id = None
@@ -108,6 +109,60 @@ async def setup_commands(bot):
             await channel.send(f"\n✅ **{len(matches)} matches created** from {len(signups)} signups!")
         else:
             await channel.send("Not enough players to form matches. Need at least 2 people with appropriate roles (Wizard, Apprentice, or Sage).")
+
+    #----------------- TRIBE DETECTOR COMMANDS-----------
+    @bot.command(name='detect')
+    async def detect_tribes(ctx, map_name: str, game_size: str, max_points: int, *enemy_scores):
+        """
+        Detect opponent tribes. Usage:
+        %detect "Pangea" "3v3" 12 515 620 630
+        %detect "Archi" "2v2" 10 515 620
+        """
+        # Check if user has Spellkeeper role
+        spellkeeper_role = discord.utils.get(ctx.author.roles, name="Spellkeeper")
+        if not spellkeeper_role:
+            await ctx.send("❌ You need the **Spellkeeper** role to use this command!")
+            return
+        
+        # Input validation
+        if game_size.lower() not in ["2v2", "3v3"]:
+            await ctx.send("❌ Game size must be '2v2' or '3v3'")
+            return
+        
+        expected_count = 2 if game_size.lower() == "2v2" else 3
+        if len(enemy_scores) != expected_count:
+            await ctx.send(f"❌ {game_size} requires {expected_count} enemy scores, got {len(enemy_scores)}")
+            return
+        
+        # Convert scores to integers
+        try:
+            enemy_scores_int = [int(score) for score in enemy_scores]
+        except ValueError:
+            await ctx.send("❌ Enemy scores must be integers")
+            return
+        
+        # Validate scores are within expected range
+        valid_scores = [415, 465, 515, 520, 530, 615, 620, 630, 730]
+        for score in enemy_scores_int:
+            if score not in valid_scores:
+                await ctx.send(f"❌ Invalid score: {score}. Valid scores are: {', '.join(map(str, valid_scores))}")
+                return
+        
+        # Call the detection - NO LONGER NEEDS TRY/EXCEPT FOR IMPORT
+        try:
+            # Use the imported function directly
+            result = detect_tribes_for_discord(map_name, game_size, max_points, enemy_scores_int)
+            
+            # Split long messages if needed
+            if len(result) > 2000:
+                parts = [result[i:i+2000] for i in range(0, len(result), 2000)]
+                for part in parts:
+                    await ctx.send(part)
+            else:
+                await ctx.send(result)
+                
+        except Exception as e:
+            await ctx.send(f"❌ Error in tribe detection: {str(e)}")
     
     # ---------------- REMINDER COMMANDS ----------------
     @bot.command()
