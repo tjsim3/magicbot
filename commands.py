@@ -320,6 +320,7 @@ async def setup_commands(bot):
                 value=(
                     "`%setprefix <prefix>` - Change command prefix\n"
                     "`%serverstats` - Detailed server statistics"
+                    "`%initiate` - Add spellkeeper and either Sorcerers or Warlocks role to a player"
                 ),
                 inline=False
             )
@@ -346,18 +347,6 @@ async def setup_commands(bot):
             inline=False
         )
         
-        # Fun commands
-        embed.add_field(
-            name="🎲 Fun Commands",
-            value=(
-                "`%roll [dice]` - Roll dice (e.g., %roll 2d6)\n"
-                "`%flip` - Flip a coin\n"
-                "`%8ball <question>` - Ask the magic 8-ball\n"
-                "`%quote` - Get an inspirational quote\n"
-                "`%choose <options>` - Choose between options"
-            ),
-            inline=False
-        )
         
         # User commands
         embed.add_field(
@@ -652,7 +641,7 @@ async def setup_commands(bot):
     @bot.command(name='flip')
     async def flip_coin(ctx):
         """Flip a coin"""
-        result = random.choice(["Heads", "Tails"])
+        result = random.choice(["Heads", "Tails", "Heads", "Tails", "Heads", "Tails", "Heads", "Tails", "Heads", "Tails", "Your Mom"])
         embed = discord.Embed(
             title="🪙 Coin Flip",
             description=f"The coin landed on: **{result}**!",
@@ -697,6 +686,11 @@ async def setup_commands(bot):
             ("Practice makes progress, not perfection.", "Unknown"),
             ("A wizard is never late, nor is he early. He arrives precisely when he means to.", "Gandalf"),
             ("It does not do to dwell on dreams and forget to live.", "Albus Dumbledore")
+            ("You have plenty of courage, I am sure. All you need is confidence in yourself", "The Wizard of Oz")
+            ("It is our choices, Harry, that show what we truly are, far more than our abilities.", "Albus Dumbledore")
+            ("Things never happen the same way twice, dear one.", "Aslan")
+            ("The future is nothing but a hundred thousand threads, but the past is a fabric that can never be rewoven.", "Merlin")
+
         ]
         
         quote, author = random.choice(quotes)
@@ -730,7 +724,7 @@ async def setup_commands(bot):
         choice = random.choice(options)
         embed = discord.Embed(
             title="🤔 Decision Made!",
-            description=f"I choose: **{choice}**",
+            description=f"The Sorcerer Supreme says: **{choice}**",
             color=discord.Color.green()
         )
         embed.add_field(name="Options were:", value=", ".join(options), inline=False)
@@ -826,6 +820,10 @@ async def setup_commands(bot):
         elif any(word in content for word in ['thanks magic', 'thank you magic', 'thanks bot']):
             responses = ["🤖 You're welcome!", "✨ Happy to help!", "🎩 At your service!"]
             await message.channel.send(random.choice(responses))
+
+        elif any(word in content for word in ['@Spellkeeper Please Welcome']):
+            responses = ['Welcome, apprentice of the arcane. You step now into a realm where knowledge is power, silence holds secrets, and every spark you conjure shapes both your fate and the world around you. Walk with humility, seek with courage, and remember: true sorcery is not in the spell, but in the soul that casts it.']
+            await message.channel.send(responses)
         
         # Training encouragement
         elif any(phrase in content for phrase in ['failed', 'lost', 'defeated', 'bad day']):
