@@ -631,6 +631,17 @@ async def setup_commands(bot):
         
         print(f"✅ User has Spellkeeper role: {spellkeeper_role}")
         
+        # ADDED: Channel group restriction
+        # Replace these IDs with your actual category/channel group IDs
+        ALLOWED_CATEGORY_IDS = [1398755280384430130, 1398755544239444168]  # Replace with your actual category IDs
+        
+        if ctx.channel.category_id not in ALLOWED_CATEGORY_IDS:
+            await ctx.send("❌ This command can only be used in specific channel groups!")
+            print(f"❌ Command used in disallowed category: {ctx.channel.category_id}")
+            return
+        
+        print(f"✅ Channel is in allowed category: {ctx.channel.category_id}")
+        
         # Get all emojis provided (filter out None values)
         new_emojis = [emoji for emoji in [emoji1, emoji2, emoji3, emoji4] if emoji is not None]
         print(f"📝 New emojis to add: {new_emojis}")
