@@ -706,7 +706,7 @@ async def setup_commands(bot):
 
         ]
 
-        ]
+        
         
         quote, author = random.choice(quotes)
         embed = discord.Embed(
