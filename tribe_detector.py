@@ -147,41 +147,49 @@ def get_tribe_points_for_config(map_type, game_size):
         raise ValueError(f"Unsupported configuration: {map_type} {game_size}")
     return TRIBE_POINTS_CONFIG[config_key]
 
-def calculate_tribe_combinations(opponent_scores, max_tribe_points, map_type, game_size):
+def calculate_tribe_combinations(opponent_scores, max_tribe_points, map_type, game_size, consider_corner_spawns=True, min_points_threshold=2):
     """
-    Calculate all possible tribe combinations for opponents based on their scores,
-    the maximum allowed tribe points, and the specific map/game configuration.
+    Calculate tribe combinations with additional filtering options.
     
     Args:
         opponent_scores: List of scores observed from opponents
-        max_tribe_points: Maximum total tribe points allowed for the team
+        max_tribe_points: Maximum total tribe points allowed
         map_type: Map type (pangea, archi, conti, dry, lakes)
         game_size: Game size (2v2, 3v3)
-    
-    Returns:
-        List of valid tribe combinations with their total points
+        consider_corner_spawns: Whether to account for corner spawns (-5 score)
+        min_points_threshold: Only show results within X points of max (e.g., 2 means max-2 or higher)
     """
     # Get the correct tribe points configuration
     tribe_points = get_tribe_points_for_config(map_type, game_size)
     
-    # Get all possible tribes for each score
+    # Get all possible tribes for each score (with corner spawn consideration)
     possible_tribes_per_score = []
     for score in opponent_scores:
-        tribes = get_possible_tribes_from_score(score)
+        tribes = get_possible_tribes_from_score(score, consider_corner_spawns)
         if not tribes:
-            print(f"Warning: No tribes found for score {score}")
             return []
         possible_tribes_per_score.append(tribes)
     
     # Generate all possible combinations
     valid_combinations = []
+    seen_combinations = set()  # To track duplicate combinations
     
     def generate_combinations(index, current_combination, used_tribes):
         if index == len(possible_tribes_per_score):
+            # Sort the combination to identify duplicates regardless of order
+            sorted_combo = tuple(sorted(current_combination))
+            
+            # Skip duplicate combinations (same tribes in different order)
+            if sorted_combo in seen_combinations:
+                return
+            
             # Check if this combination is valid
             total_points = sum(tribe_points.get(tribe, 0) for tribe in current_combination)
-            if total_points <= max_tribe_points:
+            
+            # Apply minimum points threshold (only show results close to max)
+            if total_points <= max_tribe_points and total_points >= (max_tribe_points - min_points_threshold):
                 valid_combinations.append((current_combination.copy(), total_points))
+                seen_combinations.add(sorted_combo)
             return
         
         # Try each possible tribe for the current score
@@ -195,7 +203,7 @@ def calculate_tribe_combinations(opponent_scores, max_tribe_points, map_type, ga
     
     generate_combinations(0, [], set())
     
-    # Sort by total points (descending) - higher points first since players want to maximize their tribe strength
+    # Sort by total points (descending)
     valid_combinations.sort(key=lambda x: x[1], reverse=True)
     
     return valid_combinations
@@ -220,22 +228,29 @@ def display_tribe_points_for_config(map_type, game_size):
     except ValueError as e:
         print(f"Error: {e}")
 
+def apply_corner_spawn_adjustment(score):
+    """Adjust score for corner spawn (-5 points)"""
+    return score - 5
+
+def get_possible_tribes_from_score(score, consider_corner_spawns=True):
+    """Get all possible tribes that could have the given starting score, with corner spawn option."""
+    possible_tribes = SCORE_TO_TRIBES.get(score, [])
+    
+    if consider_corner_spawns:
+        # Also check for tribes that could be in corner spawns (score + 5)
+        corner_adjusted_score = score + 5
+        corner_tribes = SCORE_TO_TRIBES.get(corner_adjusted_score, [])
+        possible_tribes.extend(corner_tribes)
+    
+    return list(set(possible_tribes))  # Remove duplicates
+
+
         # ===== DISCORD BOT WRAPPER FUNCTION =====
 # ADD THIS AFTER ALL THE OTHER FUNCTIONS BUT BEFORE THE TEST CODE
 
-def detect_tribes_for_discord(map_name: str, game_size: str, max_tribe_points: int, enemy_scores: list):
+def detect_tribes_for_discord(map_name: str, game_size: str, max_tribe_points: int, enemy_scores: list, consider_corner_spawns=True, min_points_threshold=2):
     """
-    Wrapper function for Discord bot usage
-    Returns formatted string with results
-    
-    Args:
-        map_name: Map type (pangea, archi, conti, dry, lakes)
-        game_size: Game size (2v2, 3v3)
-        max_tribe_points: Maximum tribe points allowed
-        enemy_scores: List of enemy starting scores
-    
-    Returns:
-        Formatted string for Discord output
+    Wrapper function for Discord bot usage with enhanced filtering
     """
     map_type = map_name.lower()
     game_size = game_size.lower()
@@ -244,8 +259,11 @@ def detect_tribes_for_discord(map_name: str, game_size: str, max_tribe_points: i
         # Get tribe points configuration
         tribe_points = get_tribe_points_for_config(map_type, game_size)
         
-        # Calculate combinations
-        combinations = calculate_tribe_combinations(enemy_scores, max_tribe_points, map_type, game_size)
+        # Calculate combinations with filtering options
+        combinations = calculate_tribe_combinations(
+            enemy_scores, max_tribe_points, map_type, game_size, 
+            consider_corner_spawns, min_points_threshold
+        )
         
         if not combinations:
             return "❌ No valid tribe combinations found with the given constraints!"
@@ -255,18 +273,28 @@ def detect_tribes_for_discord(map_name: str, game_size: str, max_tribe_points: i
         result.append(f"**{map_name.title()} {game_size.upper()} Tribe Detection**")
         result.append(f"Enemy scores: {enemy_scores}")
         result.append(f"Max tribe points: {max_tribe_points}")
+        if consider_corner_spawns:
+            result.append(f"*Considering corner spawns (-5 score adjustment)*")
+        result.append(f"*Showing only combinations within {min_points_threshold} points of max*")
         result.append("")
         
-        # Show top 5 most likely combinations
-        for i, (combo, total_points) in enumerate(combinations[:5], 1):
-            result.append(f"**Possibility {i}:** {', '.join([t.title() for t in combo])} (Total: {total_points} points)")
+        # Show top combinations
+        for i, (combo, total_points) in enumerate(combinations[:8], 1):
+            tribe_details = []
             for tribe in combo:
                 points = tribe_points.get(tribe, 0)
-                result.append(f"   - {tribe.title()} ({points} points)")
+                base_score = TRIBE_STARTING_SCORES.get(tribe, "?")
+                # Check if this is a corner spawn (actual score would be base_score - 5)
+                is_corner = any(score == base_score - 5 for score in enemy_scores)
+                corner_note = " (corner spawn)" if is_corner else ""
+                tribe_details.append(f"{tribe.title()}{corner_note} ({points} points)")
+            
+            result.append(f"**Possibility {i}:** {', '.join(tribe_details)}")
+            result.append(f"   Total: {total_points} points")
             result.append("")
         
-        if len(combinations) > 5:
-            result.append(f"*... and {len(combinations) - 5} more possibilities*")
+        if len(combinations) > 8:
+            result.append(f"*... and {len(combinations) - 8} more possibilities*")
         
         return "\n".join(result)
         
