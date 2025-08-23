@@ -110,13 +110,13 @@ async def setup_commands(bot):
         else:
             await channel.send("Not enough players to form matches. Need at least 2 people with appropriate roles (Wizard, Apprentice, or Sage).")
 
-    #----------------- TRIBE DETECTOR COMMANDS-----------
+    #----------------- TRIBE DETECTOR COMMAND-----------
     @bot.command(name='detect')
     async def detect_tribes(ctx, map_name: str, game_size: str, max_points: int, *enemy_scores):
         """
         Detect opponent tribes with advanced filtering. Usage:
-        %detect "Pangea" "3v3" 12 515 620 630
-        %detect "Archi" "2v2" 10 515 620
+        %detect pangea 3v3 12 515 620 630
+        %detect archi 2v2 10 515 620
         """
         # Check if user has Spellkeeper role
         spellkeeper_role = discord.utils.get(ctx.author.roles, name="Spellkeeper")
@@ -124,27 +124,58 @@ async def setup_commands(bot):
             await ctx.send("❌ You need the **Spellkeeper** role to use this command!")
             return
         
-        # Input validation
-        if game_size.lower() not in ["2v2", "3v3"]:
+        # Input validation - remove quotes if user added them
+        map_name = map_name.strip('"\'')
+        game_size = game_size.strip('"\'')
+        
+        # Map name aliases and auto-correction
+        map_aliases = {
+            'pang': 'pangea', 'pangea': 'pangea',
+            'arch': 'archi', 'archi': 'archi', 'archipelago': 'archi',
+            'cont': 'conti', 'conti': 'conti', 'continents': 'conti',
+            'dry': 'dry', 'dryland': 'dry',
+            'lake': 'lakes', 'lakes': 'lakes'
+        }
+        
+        # Game size aliases
+        game_aliases = {
+            '2v2': '2v2', '2': '2v2', '22': '2v2',
+            '3v3': '3v3', '3': '3v3', '33': '3v3'
+        }
+        
+        # Auto-correct map name
+        map_name_lower = map_name.lower()
+        if map_name_lower in map_aliases:
+            map_name = map_aliases[map_name_lower]
+        else:
+            await ctx.send(f"❌ Invalid map: {map_name}. Valid maps: pangea, archi, conti, dry, lakes")
+            return
+        
+        # Auto-correct game size
+        game_size_lower = game_size.lower()
+        if game_size_lower in game_aliases:
+            game_size = game_aliases[game_size_lower]
+        else:
             await ctx.send("❌ Game size must be '2v2' or '3v3'")
             return
         
-        expected_count = 2 if game_size.lower() == "2v2" else 3
+        expected_count = 2 if game_size == "2v2" else 3
         if len(enemy_scores) != expected_count:
             await ctx.send(f"❌ {game_size} requires {expected_count} enemy scores, got {len(enemy_scores)}")
             return
         
-        # Convert scores to integers
+        # Convert scores to integers (remove quotes if any)
         try:
-            enemy_scores_int = [int(score) for score in enemy_scores]
+            enemy_scores_int = []
+            for score in enemy_scores:
+                clean_score = str(score).strip('"\'')
+                enemy_scores_int.append(int(clean_score))
         except ValueError:
             await ctx.send("❌ Enemy scores must be integers")
             return
         
         # Validate scores are within possible range (accounting for corner spawns -5)
-        # Base valid scores
         base_valid_scores = [415, 465, 515, 520, 530, 615, 620, 630, 730]
-        # Also allow scores that could be corner spawns (base score - 5)
         corner_valid_scores = [score - 5 for score in base_valid_scores if score - 5 >= 0]
         all_valid_scores = list(set(base_valid_scores + corner_valid_scores))
         all_valid_scores.sort()
@@ -153,12 +184,6 @@ async def setup_commands(bot):
             if score not in all_valid_scores:
                 await ctx.send(f"❌ Invalid score: {score}. Valid scores are: {', '.join(map(str, all_valid_scores))}")
                 return
-        
-        # Validate map name
-        valid_maps = ["pangea", "archi", "conti", "dry", "lakes"]
-        if map_name.lower() not in valid_maps:
-            await ctx.send(f"❌ Invalid map: {map_name}. Valid maps are: {', '.join(valid_maps)}")
-            return
         
         # Validate max points is reasonable
         if max_points < 1 or max_points > 20:
@@ -179,42 +204,21 @@ async def setup_commands(bot):
             # Delete processing message
             await processing_msg.delete()
             
-            # Split long messages if needed (Discord has 2000 character limit)
+            # Split long messages if needed
             if len(result) > 2000:
-                parts = []
-                current_part = []
-                current_length = 0
-                
-                for line in result.split('\n'):
-                    if current_length + len(line) + 1 > 2000:
-                        parts.append('\n'.join(current_part))
-                        current_part = []
-                        current_length = 0
-                    
-                    current_part.append(line)
-                    current_length += len(line) + 1
-                
-                if current_part:
-                    parts.append('\n'.join(current_part))
-                
-                # Send parts with delay to avoid rate limiting
-                for i, part in enumerate(parts):
-                    if i == 0:
-                        await ctx.send(part)
-                    else:
-                        await asyncio.sleep(1)
-                        await ctx.send(part)
+                parts = [result[i:i+2000] for i in range(0, len(result), 2000)]
+                for part in parts:
+                    await ctx.send(part)
+                    await asyncio.sleep(1)
             else:
                 await ctx.send(result)
                 
         except Exception as e:
-            # Delete processing message on error
             try:
                 await processing_msg.delete()
             except:
                 pass
             await ctx.send(f"❌ Error in tribe detection: {str(e)}")
-    
     # ---------------- REMINDER COMMANDS ----------------
     @bot.command()
     async def remindme(ctx, time_in_minutes: int, *, reminder_message: str):
@@ -425,7 +429,7 @@ async def setup_commands(bot):
                 name="⚔️ High Mage Commands",
                 value=(
                     "`%setprefix <prefix>` - Change command prefix\n"
-                    "`%serverstats` - Detailed server statistics"
+                    "`%serverstats` - Detailed server statistics\n"
                     "`%initiate` - Add Spellkeeper and either Sorcerers or Walocks role to a player"
                 ),
                 inline=False
@@ -568,7 +572,9 @@ async def setup_commands(bot):
             name="🤖 General Commands",
             value=(
                 "`%info` - Show bot information\n"
-                "`%helpme` - Show this help message"
+                "`%helpme` - Show this help message\n"
+                "`%setemojis` - Set emoji header for game channels (Spellkeeper Only)\n"
+                "`%detect` - Detect enemy tribes (Spellkeeper Only)"
             ),
             inline=False
         )
