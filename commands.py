@@ -339,6 +339,85 @@ async def setup_commands(bot):
             
         except Exception as e:
             await ctx.send(f"❌ Error adding log: {str(e)}")
+
+
+    @bot.command(name='undo')
+    @commands.check(can_use_log_commands)
+    async def undo_last_turn(ctx, game_id: str = None):
+        """Remove the most recent turn. Usage: %undo [gameID]"""
+        # Get game ID from channel name if not provided
+        if game_id is None:
+            game_id = get_game_id_from_channel(ctx.channel.name)
+            if game_id is None:
+                await ctx.send("❌ No game ID provided and couldn't find one in channel name!")
+                return
+        
+        try:
+            conn = get_db_connection()
+            c = conn.cursor()
+            
+            # First check if game exists
+            c.execute("SELECT config, players FROM games WHERE game_id = ?", (game_id,))
+            game = c.fetchone()
+            
+            if not game:
+                await ctx.send(f"❌ Game {game_id} not found!")
+                conn.close()
+                return
+            
+            # Get the most recent turn
+            c.execute("SELECT turn, scores, notes FROM logs WHERE game_id = ? ORDER BY turn DESC LIMIT 1", (game_id,))
+            last_turn = c.fetchone()
+            
+            if not last_turn:
+                await ctx.send(f"❌ No turns found for game {game_id}!")
+                conn.close()
+                return
+            
+            turn_number, scores_json, notes = last_turn
+            scores = json.loads(scores_json)
+            
+            # Get players for display
+            players = json.loads(game[1])
+            
+            # Confirm deletion
+            confirmation_msg = (
+                f"⚠️ **Are you sure you want to delete Turn {turn_number}?**\n"
+                f"**Scores:** {', '.join(f'{players[i]}: {scores[i]}' for i in range(len(scores)))}\n"
+                f"**Notes:** {notes}\n\n"
+                f"Type `confirm` in the next 30 seconds to proceed, or anything else to cancel."
+            )
+            
+            await ctx.send(confirmation_msg)
+            
+            # Wait for confirmation
+            def check(m):
+                return m.author == ctx.author and m.channel == ctx.channel
+            
+            try:
+                response = await bot.wait_for('message', timeout=30.0, check=check)
+                
+                if response.content.lower() == 'confirm':
+                    # Delete the turn
+                    c.execute("DELETE FROM logs WHERE game_id = ? AND turn = ?", (game_id, turn_number))
+                    conn.commit()
+                    
+                    # Check if any turns remain
+                    c.execute("SELECT COUNT(*) FROM logs WHERE game_id = ?", (game_id,))
+                    remaining_turns = c.fetchone()[0]
+                    
+                    await ctx.send(f"✅ **Turn {turn_number} deleted successfully!**\n"
+                                  f"**Game {game_id}** now has {remaining_turns} turn{'s' if remaining_turns != 1 else ''}.")
+                else:
+                    await ctx.send("❌ Turn deletion cancelled.")
+                    
+            except asyncio.TimeoutError:
+                await ctx.send("⏰ Turn deletion timed out. Please try again.")
+            
+            conn.close()
+            
+        except Exception as e:
+            await ctx.send(f"❌ Error undoing turn: {str(e)}")
     
     @bot.command(name='showlogs')
     @commands.check(can_use_log_commands)
