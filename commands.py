@@ -16,6 +16,40 @@ from datetime import datetime
 
 
 #button classes
+class DeleteConfirmView(ui.View):
+    def __init__(self, ctx, game_id, timeout=60):
+        super().__init__(timeout=timeout)
+        self.ctx = ctx
+        self.game_id = game_id
+        self.result = None
+    
+    @ui.button(label="✅ We Won!", style=ButtonStyle.success, emoji="🎉")
+    async def win(self, interaction: discord.Interaction, button: ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("❌ Only the command author can interact!", ephemeral=True)
+            return
+        self.result = 'win'
+        self.stop()
+        await interaction.response.defer()
+    
+    @ui.button(label="❌ We Lost", style=ButtonStyle.danger, emoji="💀")
+    async def loss(self, interaction: discord.Interaction, button: ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("❌ Only the command author can interact!", ephemeral=True)
+            return
+        self.result = 'loss'
+        self.stop()
+        await interaction.response.defer()
+    
+    @ui.button(label="🚫 Just Delete", style=ButtonStyle.secondary, emoji="🗑️")
+    async def cancel(self, interaction: discord.Interaction, button: ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("❌ Only the command author can interact!", ephemeral=True)
+            return
+        self.result = 'delete'
+        self.stop()
+        await interaction.response.defer()
+
 class MapSelectView(ui.View):
     def __init__(self, ctx, timeout=60):
         super().__init__(timeout=timeout)
@@ -775,37 +809,119 @@ async def setup_commands(bot):
     @bot.command(name='deletelog')
     @commands.check(can_use_log_commands)
     async def delete_log(ctx, game_id: str = None):
-        """Delete a game log (Admin only). Usage: %deletelog [gameID]"""
-        # If no game ID provided, try to detect from channel name
-        if game_id is None:
-            game_id = get_game_id_from_channel(ctx.channel.name)
-            if game_id is None:
-                await ctx.send("❌ No game ID provided and couldn't find one in channel name!")
-                return
+        """Delete a game log and track win/loss"""
+        # ... (existing game ID detection code) ...
         
+        # After finding the game, show win/loss options
+        view = DeleteConfirmView(ctx, game_id)
+        embed = discord.Embed(
+            title="🎮 Game Completed",
+            description=f"Did you win or lose game **{game_id}**?",
+            color=0x00ff00
+        )
+        embed.add_field(name="✅ We Won", value="Record victory and congratulate team", inline=False)
+        embed.add_field(name="❌ We Lost", value="Record loss for statistics", inline=False)
+        embed.add_field(name="🚫 Just Delete", value="Only delete without tracking", inline=False)
+        
+        message = await ctx.send(embed=embed, view=view)
+        await view.wait()
+        
+        if view.result == 'win':
+            await record_victory(ctx, game_id, message)
+        elif view.result == 'loss':
+            await record_loss(ctx, game_id, message)
+        else:
+            # Just delete without tracking
+            await delete_game_only(ctx, game_id, message)
+    
+    async def record_victory(ctx, game_id, message):
+        """Record victory and post to victory channel"""
+        try:
+            # Get game details
+            conn = get_db_connection()
+            c = conn.cursor()
+            c.execute("SELECT players FROM games WHERE game_id = ?", (game_id,))
+            game = c.fetchone()
+            
+            if game:
+                players = json.loads(game[0])
+                
+                # Ask for enemy team name
+                await message.edit(content="🎉 Victory! Enter the enemy team name (or type 'skip' to use player names):", embed=None, view=None)
+                
+                def check(m):
+                    return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id
+                
+                try:
+                    enemy_msg = await bot.wait_for("message", check=check, timeout=60.0)
+                    enemy_team = enemy_msg.content
+                    
+                    if enemy_team.lower() == 'skip':
+                        c.execute("SELECT players FROM games WHERE game_id = ?", (game_id,))
+                        game_data = c.fetchone()
+                        if game_data:
+                            enemy_team = ", ".join(json.loads(game_data[0]))
+                    
+                    # Record victory in database
+                    c.execute('''INSERT INTO completed_games 
+                                (game_id, result, players, enemy_team, completed_at)
+                                VALUES (?, ?, ?, ?, ?)''',
+                             (game_id, 'win', json.dumps(players), enemy_team, datetime.now()))
+                    
+                    conn.commit()
+                    
+                    # Update player stats
+                    for player in players:
+                        update_player_stats(player, 'win')
+                    
+                    # Post to victory channel
+                    victory_channel = bot.get_channel(config.VICTORY_CHANNEL_ID)
+                    if victory_channel:
+                        congrats_msg = f"🎉 **VICTORY!** 🎉\n"
+                        congrats_msg += f"Congratulations to {', '.join(f'**{p}**' for p in players)} "
+                        congrats_msg += f"for defeating **{enemy_team}** in game {game_id}!"
+                        await victory_channel.send(congrats_msg)
+                    
+                    await message.edit(content=f"✅ Victory recorded for game {game_id}! 🎉", embed=None, view=None)
+                    
+                except asyncio.TimeoutError:
+                    await message.edit(content="⏰ Input timed out. Victory not recorded.", embed=None, view=None)
+            
+        except Exception as e:
+            await ctx.send(f"❌ Error recording victory: {str(e)}")
+        finally:
+            conn.close()
+    
+    async def record_loss(ctx, game_id, message):
+        """Record loss for statistics"""
         try:
             conn = get_db_connection()
             c = conn.cursor()
+            c.execute("SELECT players FROM games WHERE game_id = ?", (game_id,))
+            game = c.fetchone()
             
-            # Check if game exists first
-            c.execute("SELECT game_id FROM games WHERE game_id = ?", (game_id,))
-            if not c.fetchone():
-                await ctx.send(f"❌ Game {game_id} not found!")
-                conn.close()
-                return
-            
-            # Delete logs and game
-            c.execute("DELETE FROM logs WHERE game_id = ?", (game_id,))
-            c.execute("DELETE FROM games WHERE game_id = ?", (game_id,))
-            
-            conn.commit()
-            conn.close()
-            
-            await ctx.send(f"✅ Game {game_id} and all logs deleted")
-            
+            if game:
+                players = json.loads(game[0])
+                
+                # Record loss
+                c.execute('''INSERT INTO completed_games 
+                            (game_id, result, players, completed_at)
+                            VALUES (?, ?, ?, ?)''',
+                         (game_id, 'loss', json.dumps(players), datetime.now()))
+                
+                conn.commit()
+                
+                # Update player stats
+                for player in players:
+                    update_player_stats(player, 'loss')
+                
+                await message.edit(content=f"📊 Loss recorded for game {game_id}. Better luck next time! 💪", embed=None, view=None)
+                
         except Exception as e:
-            await ctx.send(f"❌ Error deleting log: {str(e)}")
-    
+            await ctx.send(f"❌ Error recording loss: {str(e)}")
+        finally:
+            conn.close()
+        
     @bot.command(name='editlog')
     @commands.check(can_use_log_commands)
     async def edit_log(ctx, turn: int, *args):
