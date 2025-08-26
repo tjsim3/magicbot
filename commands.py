@@ -224,8 +224,8 @@ async def setup_commands(bot):
         notes = "No notes"
         provided_game_id = None
         
-        # Check if last argument is a game ID (3+ digits)
-        if args and args[-1].isdigit() and len(args[-1]) >= 3:
+        # Only check for game ID if it's 6 digits (actual game ID length)
+        if args and args[-1].isdigit() and len(args[-1]) == 6:
             provided_game_id = args[-1]
             args = args[:-1]
         
