@@ -910,11 +910,11 @@ async def setup_commands(bot):
             description="Select the map type:",
             color=0x00ff00
         )
-        embed.add_field(name="Pangea", value="Standard land map", inline=True)
-        embed.add_field(name="Archi", value="Island-based map", inline=True)
-        embed.add_field(name="Conti", value="Large continents", inline=True)
-        embed.add_field(name="Dry", value="Arid environment", inline=True)
-        embed.add_field(name="Lakes", value="Water-rich map", inline=True)
+        embed.add_field(name="Pangea", value="Island surrounded by water", inline=True)
+        embed.add_field(name="Archi", value="T-Sims' favorite", inline=True)
+        embed.add_field(name="Conti", value="Continents with a large ocean", inline=True)
+        embed.add_field(name="Dry", value="No water", inline=True)
+        embed.add_field(name="Lakes", value="Random lakes", inline=True)
         
         view = MapSelectView(ctx)
         message = await ctx.send(embed=embed, view=view)
@@ -951,10 +951,9 @@ async def setup_commands(bot):
         # Step 3: Get max points
         embed = discord.Embed(
             title="🔍 Tribe Detection - Step 3/4",
-            description=f"**Map:** {map_name.title()}\n**Game Size:** {game_size.upper()}\n\nEnter the maximum tribe points allowed (1-20):",
+            description=f"**Map:** {map_name.title()}\n**Game Size:** {game_size.upper()}\n\nEnter the maximum tribe points allowed:",
             color=0x00ff00
         )
-        embed.add_field(name="Typical Values", value="2v2: 8-12 points\n3v3: 10-15 points", inline=False)
         
         await message.edit(embed=embed, view=None)
         
