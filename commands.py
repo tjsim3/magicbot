@@ -465,19 +465,41 @@ async def setup_commands(bot):
     
     @bot.command(name='editlog')
     @commands.check(can_use_log_commands)
-    async def edit_log(ctx, turn: int, scores: str, notes: str = "No notes", game_id: str = None):
-        """Edit a specific turn log. Usage: %editlog 5 "10,20,30,40" "New notes" [gameID]"""
+    async def edit_log(ctx, turn: int, *args):
+        """Edit a specific turn log. Usage: %editlog 5 10 20 30 40 [notes] [gameID]"""
         # Get game ID from channel name if not provided
+        game_id = get_game_id_from_channel(ctx.channel.name)
+        
+        # Parse arguments
+        scores = []
+        notes = "No notes"
+        provided_game_id = None
+        
+        # Check if last argument is a game ID (6 digits)
+        if args and args[-1].isdigit() and len(args[-1]) == 6:
+            provided_game_id = args[-1]
+            args = args[:-1]
+        
+        # Use provided game ID or channel-detected game ID
+        game_id = provided_game_id or game_id
+        
         if game_id is None:
-            game_id = get_game_id_from_channel(ctx.channel.name)
-            if game_id is None:
-                await ctx.send("❌ No game ID provided and couldn't find one in channel name!")
-                return
+            await ctx.send("❌ No game ID provided and couldn't find one in channel name!")
+            return
+        
+        # Check if there are notes (non-numeric argument)
+        if args and not args[-1].isdigit():
+            notes = args[-1]
+            args = args[:-1]
+        
+        # The remaining args should be scores
+        try:
+            scores = [int(arg) for arg in args]
+        except ValueError:
+            await ctx.send("❌ Scores must be integers")
+            return
         
         try:
-            # Parse scores
-            score_list = [int(s.strip()) for s in scores.split(',')]
-            
             conn = get_db_connection()
             c = conn.cursor()
             
@@ -493,15 +515,15 @@ async def setup_commands(bot):
             config = game[0]
             expected_scores = 4 if config.lower() == '2v2' else 6
             
-            if len(score_list) != expected_scores:
-                await ctx.send(f"❌ {config} requires {expected_scores} scores, got {len(score_list)}")
+            if len(scores) != expected_scores:
+                await ctx.send(f"❌ {config} requires {expected_scores} scores, got {len(scores)}")
                 conn.close()
                 return
             
             # Update log
             c.execute('''UPDATE logs SET scores = ?, notes = ?, logged_at = ?
                          WHERE game_id = ? AND turn = ?''',
-                     (json.dumps(score_list), notes, datetime.now(), game_id, turn))
+                     (json.dumps(scores), notes, datetime.now(), game_id, turn))
             
             if c.rowcount == 0:
                 await ctx.send(f"❌ Turn {turn} not found for game {game_id}")
@@ -511,8 +533,6 @@ async def setup_commands(bot):
             
             conn.close()
             
-        except ValueError:
-            await ctx.send("❌ Scores must be integers separated by commas")
         except Exception as e:
             await ctx.send(f"❌ Error editing log: {str(e)}")
 
