@@ -54,6 +54,12 @@ def get_game_id_from_channel(channel_name):
             return match.group(1)
     return None
 
+async def create_log_interactive(ctx):
+    """Interactive createlog with buttons"""
+    # This would create a message with buttons for config selection
+    # Then prompt for player names step by step
+    # More complex to implement fully
+
 def get_db_connection():
     return sqlite3.connect('game_logs.db')
 
@@ -160,26 +166,30 @@ async def setup_commands(bot):
 
     #----------------- LOG COMMANDS
     @bot.command(name='createlog')
-    async def create_log(ctx, config: str, players: str, game_id: str = None):
-        """Create a new game log. Usage: %createlog 3v3 "player1,player2,player3" [gameID]"""
-        # Get game ID from channel name if not provided
-        if game_id is None:
+    async def create_log(ctx, config: str, *players_and_id):
+        """Create a new game log. Usage: %createlog 2v2 player1 player2 player3 player4 [gameID]"""
+        # Separate players from optional game_id
+        if players_and_id and players_and_id[-1].isdigit() and len(players_and_id[-1]) >= 3:
+            game_id = players_and_id[-1]
+            players = list(players_and_id[:-1])
+        else:
             game_id = get_game_id_from_channel(ctx.channel.name)
-            if game_id is None:
-                await ctx.send("❌ No game ID provided and couldn't find one in channel name!")
-                return
+            players = list(players_and_id)
         
-        # Validate config
+        if game_id is None:
+            await ctx.send("❌ No game ID provided and couldn't find one in channel name!")
+            return
+        
+        # Validate config and player count
         if config.lower() not in ['2v2', '3v3']:
             await ctx.send("❌ Config must be '2v2' or '3v3'")
             return
         
-        # Parse players
-        player_list = [p.strip() for p in players.split(',')]
         expected_players = 4 if config.lower() == '2v2' else 6
-        if len(player_list) != expected_players:
-            await ctx.send(f"❌ {config} requires {expected_players} players, got {len(player_list)}")
+        if len(players) != expected_players:
+            await ctx.send(f"❌ {config} requires {expected_players} players, got {len(players)}")
             return
+
         
         try:
             conn = get_db_connection()
@@ -252,6 +262,14 @@ async def setup_commands(bot):
             conn.close()
             
             await ctx.send(f"✅ Turn {next_turn} logged for game {game_id}")
+            if latest_turn:
+                turn, scores_json, notes = latest_turn
+                scores = json.loads(scores_json)
+                confirmation = f"✅ **Turn {turn} logged successfully:**\n"
+                confirmation += "\n".join(f"Player {i+1}: {score}" for i, score in enumerate(scores))
+                if notes and notes != "No notes":
+                    confirmation += f"\n*Notes:* {notes}"
+                await ctx.send(confirmation)
             
         except ValueError:
             await ctx.send("❌ Scores must be integers separated by commas")
@@ -259,8 +277,8 @@ async def setup_commands(bot):
             await ctx.send(f"❌ Error adding log: {str(e)}")
     
     @bot.command(name='showlogs')
-    async def show_logs(ctx, game_id: str = None):
-        """Show all logs for a game. Usage: %showlogs [gameID]"""
+    async def show_logs(ctx, game_id: str = None, turn_range: str = None):
+        """Show logs for a game. Usage: %showlogs [gameID] [turn|start-end]"""
         # Get game ID from channel name if not provided
         if game_id is None:
             game_id = get_game_id_from_channel(ctx.channel.name)
@@ -268,24 +286,27 @@ async def setup_commands(bot):
                 await ctx.send("❌ No game ID provided and couldn't find one in channel name!")
                 return
         
+        # Parse turn range if provided
+        start_turn = end_turn = None
+        if turn_range:
+            if '-' in turn_range:
+                start_turn, end_turn = map(int, turn_range.split('-'))
+            else:
+                start_turn = end_turn = int(turn_range)
+        
         try:
             conn = get_db_connection()
             c = conn.cursor()
             
-            # Get game info
-            c.execute("SELECT config, players FROM games WHERE game_id = ?", (game_id,))
-            game = c.fetchone()
+            # Build query with optional turn filtering
+            if start_turn is not None:
+                query = "SELECT turn, scores, notes, logged_at FROM logs WHERE game_id = ? AND turn BETWEEN ? AND ? ORDER BY turn"
+                params = (game_id, start_turn, end_turn)
+            else:
+                query = "SELECT turn, scores, notes, logged_at FROM logs WHERE game_id = ? ORDER BY turn"
+                params = (game_id,)
             
-            if not game:
-                await ctx.send(f"❌ Game {game_id} not found!")
-                conn.close()
-                return
-            
-            config, players_json = game
-            players = json.loads(players_json)
-            
-            # Get all logs
-            c.execute("SELECT turn, scores, notes, logged_at FROM logs WHERE game_id = ? ORDER BY turn", (game_id,))
+            c.execute(query, params)
             logs = c.fetchall()
             
             conn.close()
