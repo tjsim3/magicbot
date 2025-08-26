@@ -246,6 +246,156 @@ def init_database():
 
 
 # Helper functions
+
+# ADD THESE HELPER FUNCTIONS AFTER THE VIEW CLASSES
+
+async def record_victory(ctx, game_id, message):
+    """Record victory and post to victory channel"""
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("SELECT players, config FROM games WHERE game_id = ?", (game_id,))
+        game = c.fetchone()
+        
+        if not game:
+            await message.edit(content="❌ Game not found!", embed=None, view=None)
+            return
+        
+        players = json.loads(game[0])
+        config = game[1]
+        
+        # Get enemy team name
+        await message.edit(content="🎉 **VICTORY!** 🎉\n\nEnter the enemy team name:", embed=None, view=None)
+        
+        def check(m):
+            return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id
+        
+        enemy_msg = await bot.wait_for("message", check=check, timeout=60.0)
+        enemy_team = enemy_msg.content
+        
+        # Get map type
+        await message.edit(content="🗺️ Enter map type (pangea, archi, conti, dry, lakes):", embed=None, view=None)
+        map_msg = await bot.wait_for("message", check=check, timeout=60.0)
+        map_name = map_msg.content.lower()
+        
+        # Get tribe points
+        await message.edit(content="⚡ Enter tribe points used:", embed=None, view=None)
+        points_msg = await bot.wait_for("message", check=check, timeout=60.0)
+        tribe_points = int(points_msg.content)
+        
+        # Record victory
+        c.execute('''INSERT INTO completed_games (game_id, result, map_name, tribe_points, players, enemy_team, completed_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)''',
+                 (game_id, 'win', map_name, tribe_points, json.dumps(players), enemy_team, datetime.now()))
+        
+        conn.commit()
+        
+        # Update player stats
+        for player in players:
+            update_player_stats(player, 'win', map_name, tribe_points)
+        
+        # Post to victory channel
+        victory_channel_id = os.getenv('VICTORY_CHANNEL_ID')
+        if victory_channel_id:
+            victory_channel = bot.get_channel(int(victory_channel_id))
+            if victory_channel:
+                congrats_msg = f"🎉 **VICTORY!** 🎉\n**Game:** {game_id}\n**Winners:** {', '.join(players)}\n**Defeated:** {enemy_team}\n**Map:** {map_name} | **Points:** {tribe_points}"
+                await victory_channel.send(congrats_msg)
+        
+        # Cleanup
+        try:
+            await enemy_msg.delete()
+            await map_msg.delete()
+            await points_msg.delete()
+        except:
+            pass
+        
+        await message.edit(content=f"✅ Victory recorded for game {game_id}! 🎉", embed=None, view=None)
+        
+    except asyncio.TimeoutError:
+        await message.edit(content="⏰ Input timed out. Victory not recorded.", embed=None, view=None)
+    except Exception as e:
+        await ctx.send(f"❌ Error: {str(e)}")
+    finally:
+        conn.close()
+
+async def record_loss(ctx, game_id, message):
+    """Record loss for statistics"""
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("SELECT players FROM games WHERE game_id = ?", (game_id,))
+        game = c.fetchone()
+        
+        if game:
+            players = json.loads(game[0])
+            c.execute('''INSERT INTO completed_games (game_id, result, players, completed_at)
+                         VALUES (?, ?, ?, ?)''',
+                     (game_id, 'loss', json.dumps(players), datetime.now()))
+            conn.commit()
+            for player in players:
+                update_player_stats(player, 'loss')
+            await message.edit(content=f"📊 Loss recorded for game {game_id}.", embed=None, view=None)
+            
+    except Exception as e:
+        await ctx.send(f"❌ Error: {str(e)}")
+    finally:
+        conn.close()
+
+def update_player_stats(player_name, result, map_name=None, tribe_points=0):
+    """Update player statistics"""
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        
+        c.execute("SELECT wins, losses, total_games, average_points FROM player_stats WHERE player_name = ?", (player_name,))
+        stats = c.fetchone()
+        
+        if stats:
+            wins, losses, total_games, avg_points = stats
+            wins = wins + (1 if result == 'win' else 0)
+            losses = losses + (1 if result == 'loss' else 0)
+            total_games = wins + losses
+            win_rate = (wins * 100) // total_games if total_games > 0 else 0
+            
+            # Update average points
+            total_points = avg_points * (total_games - 1) + tribe_points
+            new_avg = total_points // total_games if total_games > 0 else 0
+            
+            c.execute('''UPDATE player_stats 
+                         SET wins=?, losses=?, total_games=?, win_rate=?, average_points=?, last_updated=?
+                         WHERE player_name=?''',
+                     (wins, losses, total_games, win_rate, new_avg, datetime.now(), player_name))
+        else:
+            # New player
+            wins = 1 if result == 'win' else 0
+            losses = 1 if result == 'loss' else 0
+            total_games = wins + losses
+            win_rate = (wins * 100) // total_games if total_games > 0 else 0
+            
+            c.execute('''INSERT INTO player_stats 
+                         (player_name, wins, losses, total_games, win_rate, average_points, last_updated)
+                         VALUES (?, ?, ?, ?, ?, ?, ?)''',
+                     (player_name, wins, losses, total_games, win_rate, tribe_points, datetime.now()))
+        
+        conn.commit()
+        conn.close()
+        
+    except Exception as e:
+        print(f"Stats error: {e}")
+
+
+def is_leader(member):
+    """Check if member is admin"""
+    return member.guild_permissions.administrator
+
+def get_db_connection():
+    """Get database connection - MAKE SURE THIS FUNCTION EXISTS"""
+    # This should already be in your code from previous implementations
+    # If not, add it here:
+    import sqlite3
+    return sqlite3.connect('data/gamelogs.db')  # Adjust path if needed
+    
 async def can_use_log_commands(ctx):
     """Check if user is admin or teammate in this PolyELO game channel"""
     # Allow admins
@@ -327,7 +477,9 @@ async def setup_commands(bot):
     # Get configuration from environment variables
     GUILD_ID = int(os.getenv('GUILD_ID', 0))
     CHANNEL_ID = int(os.getenv('CHANNEL_ID', 0))
-    
+
+
+
     # ---------------- SIGNUP LOGIC ----------------
     async def post_signup_message():
         global signup_message_id
@@ -806,23 +958,35 @@ async def setup_commands(bot):
         except Exception as e:
             await ctx.send(f"❌ Error showing logs: {str(e)}")
     
-    @bot.command(name='deletelog')
-    @commands.check(can_use_log_commands)
-    async def delete_log(ctx, game_id: str = None):
-        """Delete a game log and track win/loss"""
-        # ... (existing game ID detection code) ...
+    # FIND YOUR EXISTING deletelog COMMAND AND REPLACE IT WITH THIS:
+
+@bot.command(name='deletelog')
+@commands.check(can_use_log_commands)
+async def delete_log(ctx, game_id: str = None):
+    """Delete a game log and track win/loss"""
+    if game_id is None:
+        game_id = get_game_id_from_channel(ctx.channel.name)
+        if game_id is None:
+            await ctx.send("❌ No game ID provided and couldn't find one in channel name!")
+            return
+    
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("SELECT game_id FROM games WHERE game_id = ?", (game_id,))
+        if not c.fetchone():
+            await ctx.send(f"❌ Game {game_id} not found!")
+            conn.close()
+            return
+        conn.close()
         
-        # After finding the game, show win/loss options
+        # Show win/loss options
         view = DeleteConfirmView(ctx, game_id)
         embed = discord.Embed(
             title="🎮 Game Completed",
             description=f"Did you win or lose game **{game_id}**?",
             color=0x00ff00
         )
-        embed.add_field(name="✅ We Won", value="Record victory and congratulate team", inline=False)
-        embed.add_field(name="❌ We Lost", value="Record loss for statistics", inline=False)
-        embed.add_field(name="🚫 Just Delete", value="Only delete without tracking", inline=False)
-        
         message = await ctx.send(embed=embed, view=view)
         await view.wait()
         
@@ -830,97 +994,20 @@ async def setup_commands(bot):
             await record_victory(ctx, game_id, message)
         elif view.result == 'loss':
             await record_loss(ctx, game_id, message)
-        else:
+        elif view.result == 'delete':
             # Just delete without tracking
-            await delete_game_only(ctx, game_id, message)
-    
-    async def record_victory(ctx, game_id, message):
-        """Record victory and post to victory channel"""
-        try:
-            # Get game details
             conn = get_db_connection()
             c = conn.cursor()
-            c.execute("SELECT players FROM games WHERE game_id = ?", (game_id,))
-            game = c.fetchone()
-            
-            if game:
-                players = json.loads(game[0])
-                
-                # Ask for enemy team name
-                await message.edit(content="🎉 Victory! Enter the enemy team name (or type 'skip' to use player names):", embed=None, view=None)
-                
-                def check(m):
-                    return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id
-                
-                try:
-                    enemy_msg = await bot.wait_for("message", check=check, timeout=60.0)
-                    enemy_team = enemy_msg.content
-                    
-                    if enemy_team.lower() == 'skip':
-                        c.execute("SELECT players FROM games WHERE game_id = ?", (game_id,))
-                        game_data = c.fetchone()
-                        if game_data:
-                            enemy_team = ", ".join(json.loads(game_data[0]))
-                    
-                    # Record victory in database
-                    c.execute('''INSERT INTO completed_games 
-                                (game_id, result, players, enemy_team, completed_at)
-                                VALUES (?, ?, ?, ?, ?)''',
-                             (game_id, 'win', json.dumps(players), enemy_team, datetime.now()))
-                    
-                    conn.commit()
-                    
-                    # Update player stats
-                    for player in players:
-                        update_player_stats(player, 'win')
-                    
-                    # Post to victory channel
-                    victory_channel = bot.get_channel(config.VICTORY_CHANNEL_ID)
-                    if victory_channel:
-                        congrats_msg = f"🎉 **VICTORY!** 🎉\n"
-                        congrats_msg += f"Congratulations to {', '.join(f'**{p}**' for p in players)} "
-                        congrats_msg += f"for defeating **{enemy_team}** in game {game_id}!"
-                        await victory_channel.send(congrats_msg)
-                    
-                    await message.edit(content=f"✅ Victory recorded for game {game_id}! 🎉", embed=None, view=None)
-                    
-                except asyncio.TimeoutError:
-                    await message.edit(content="⏰ Input timed out. Victory not recorded.", embed=None, view=None)
-            
-        except Exception as e:
-            await ctx.send(f"❌ Error recording victory: {str(e)}")
-        finally:
+            c.execute("DELETE FROM logs WHERE game_id = ?", (game_id,))
+            c.execute("DELETE FROM games WHERE game_id = ?", (game_id,))
+            conn.commit()
             conn.close()
-    
-    async def record_loss(ctx, game_id, message):
-        """Record loss for statistics"""
-        try:
-            conn = get_db_connection()
-            c = conn.cursor()
-            c.execute("SELECT players FROM games WHERE game_id = ?", (game_id,))
-            game = c.fetchone()
+            await message.edit(content=f"✅ Game {game_id} deleted.", embed=None, view=None)
+        else:
+            await message.edit(content="❌ Deletion cancelled.", embed=None, view=None)
             
-            if game:
-                players = json.loads(game[0])
-                
-                # Record loss
-                c.execute('''INSERT INTO completed_games 
-                            (game_id, result, players, completed_at)
-                            VALUES (?, ?, ?, ?)''',
-                         (game_id, 'loss', json.dumps(players), datetime.now()))
-                
-                conn.commit()
-                
-                # Update player stats
-                for player in players:
-                    update_player_stats(player, 'loss')
-                
-                await message.edit(content=f"📊 Loss recorded for game {game_id}. Better luck next time! 💪", embed=None, view=None)
-                
-        except Exception as e:
-            await ctx.send(f"❌ Error recording loss: {str(e)}")
-        finally:
-            conn.close()
+    except Exception as e:
+        await ctx.send(f"❌ Error: {str(e)}")
         
     @bot.command(name='editlog')
     @commands.check(can_use_log_commands)
@@ -1245,6 +1332,60 @@ async def setup_commands(bot):
             return True
         return commands.check(predicate)
 
+    # ADD THESE NEW COMMANDS AT THE VERY BOTTOM OF THE FILE
+
+@bot.command(name='leaderboard')
+@commands.check(is_leader)
+async def show_leaderboard(ctx):
+    """Show leadership board (Admins only)"""
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("SELECT player_name, wins, losses, win_rate FROM player_stats ORDER BY win_rate DESC")
+        players = c.fetchall()
+        
+        embed = discord.Embed(title="🏆 Leadership Board", color=0x00ff00)
+        if players:
+            leaderboard = []
+            for i, (name, wins, losses, win_rate) in enumerate(players[:10], 1):
+                leaderboard.append(f"{i}. **{name}** - {win_rate}% ({wins}W/{losses}L)")
+            embed.description = "\n".join(leaderboard)
+        else:
+            embed.description = "No statistics yet!"
+        
+        await ctx.send(embed=embed)
+        
+    except Exception as e:
+        await ctx.send(f"❌ Error: {str(e)}")
+    finally:
+        conn.close()
+
+@bot.command(name='playerstats')
+@commands.check(is_leader)
+async def player_stats(ctx, player_name: str):
+    """Show player statistics (Admins only)"""
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("SELECT * FROM player_stats WHERE player_name = ?", (player_name,))
+        stats = c.fetchone()
+        
+        if stats:
+            embed = discord.Embed(title=f"📊 {player_name}'s Stats", color=0x00ff00)
+            embed.add_field(name="Wins", value=stats[1], inline=True)
+            embed.add_field(name="Losses", value=stats[2], inline=True)
+            embed.add_field(name="Win Rate", value=f"{stats[5]}%", inline=True)
+            embed.add_field(name="Avg Points", value=stats[6], inline=True)
+            embed.add_field(name="Total Games", value=stats[4], inline=True)
+            await ctx.send(embed=embed)
+        else:
+            await ctx.send(f"❌ No stats found for {player_name}")
+            
+    except Exception as e:
+        await ctx.send(f"❌ Error: {str(e)}")
+    finally:
+        conn.close()
+        
     @bot.command(name='server')
     @is_high_mage()
     async def server_info(ctx):
