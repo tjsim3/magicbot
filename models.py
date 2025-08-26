@@ -28,6 +28,44 @@ class GameLog(Base):
     notes = Column(Text, default="No notes")
     logged_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
+class CompletedGame(Base):
+    __tablename__ = 'completed_games'
+    
+    id = Column(Integer, primary_key=True)
+    game_id = Column(String(20))
+    result = Column(String(10))  # 'win' or 'loss'
+    map_name = Column(String(20))
+    tribe_points = Column(Integer)
+    players = Column(Text)  # JSON: {player_name: tribe_name}
+    enemy_team = Column(String(200))  # Team name or player list
+    completed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    notes = Column(Text)
+
+class PlayerStats(Base):
+    __tablename__ = 'player_stats'
+    
+    player_name = Column(String(50), primary_key=True)
+    wins = Column(Integer, default=0)
+    losses = Column(Integer, default=0)
+    incomplete = Column(Integer, default=0)
+    favorite_tribes = Column(Text, default='{}')  # JSON: {tribe: count}
+    favorite_maps = Column(Text, default='{}')    # JSON: {map: count}
+    average_points = Column(Integer, default=0)
+    total_games = Column(Integer, default=0)
+    win_rate = Column(Integer, default=0)
+    last_updated = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class OngoingGame(Base):
+    __tablename__ = 'ongoing_games'
+    
+    game_id = Column(String(20), primary_key=True)
+    players = Column(Text)  # JSON list of player names
+    map_name = Column(String(20))
+    tribe_points = Column(Integer)
+    started_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    status = Column(String(20), default='active')  # 'active', 'completed'
+
+
 # Database setup
 def get_database_url():
     """Get database URL from environment or use SQLite"""
