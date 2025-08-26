@@ -886,6 +886,8 @@ async def setup_commands(bot):
             except:
                 pass
             await ctx.send(f"❌ Error in tribe detection: {str(e)}")
+
+    
     # ---------------- REMINDER COMMANDS ----------------
     @bot.command()
     async def remindme(ctx, time_in_minutes: int, *, reminder_message: str):
