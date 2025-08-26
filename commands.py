@@ -46,12 +46,11 @@ def init_database():
 
 # Helper functions
 def get_game_id_from_channel(channel_name):
-    """Extract game ID from channel name"""
-    patterns = [r'game[_-]?(\d+)', r'match[_-]?(\d+)', r'g[_-]?(\d+)', r'(\d{3,})']
-    for pattern in patterns:
-        match = re.search(pattern, channel_name, re.IGNORECASE)
-        if match:
-            return match.group(1)
+    """Extract 6-digit game ID from channel name"""
+    # Look for exactly 6 consecutive digits
+    match = re.search(r'(\d{6})', channel_name)
+    if match:
+        return match.group(1)
     return None
 
 async def create_log_interactive(ctx):
