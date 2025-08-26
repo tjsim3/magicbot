@@ -14,6 +14,68 @@ import sqlite3
 import json
 from datetime import datetime
 
+
+#button classes
+class ConfigView(ui.View):
+    def __init__(self, ctx, timeout=60):
+        super().__init__(timeout=timeout)
+        self.ctx = ctx
+        self.config = None
+        self.value = None
+    
+    @ui.button(label="2v2", style=ButtonStyle.primary)
+    async def config_2v2(self, interaction: discord.Interaction, button: ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("❌ Only the command author can interact!", ephemeral=True)
+            return
+        self.config = "2v2"
+        self.value = True
+        self.stop()
+        await interaction.response.defer()
+    
+    @ui.button(label="3v3", style=ButtonStyle.primary)
+    async def config_3v3(self, interaction: discord.Interaction, button: ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("❌ Only the command author can interact!", ephemeral=True)
+            return
+        self.config = "3v3"
+        self.value = True
+        self.stop()
+        await interaction.response.defer()
+    
+    @ui.button(label="Cancel", style=ButtonStyle.danger)
+    async def cancel(self, interaction: discord.Interaction, button: ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("❌ Only the command author can interact!", ephemeral=True)
+            return
+        self.value = False
+        self.stop()
+        await interaction.response.defer()
+
+class ConfirmView(ui.View):
+    def __init__(self, ctx, timeout=60):
+        super().__init__(timeout=timeout)
+        self.ctx = ctx
+        self.value = None
+    
+    @ui.button(label="✅ Confirm", style=ButtonStyle.success)
+    async def confirm(self, interaction: discord.Interaction, button: ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("❌ Only the command author can interact!", ephemeral=True)
+            return
+        self.value = True
+        self.stop()
+        await interaction.response.defer()
+    
+    @ui.button(label="❌ Cancel", style=ButtonStyle.danger)
+    async def cancel(self, interaction: discord.Interaction, button: ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("❌ Only the command author can interact!", ephemeral=True)
+            return
+        self.value = False
+        self.stop()
+        await interaction.response.defer()
+
 # Global variables for signup system (in-memory only)
 signup_message_id = None
 signups = set()
