@@ -20,8 +20,25 @@ def init_database():
     """Initialize the SQLite database for game logs"""
     conn = sqlite3.connect('game_logs.db')
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS games (game_id TEXT PRIMARY KEY, config TEXT, players TEXT, created_at TIMESTAMP, created_by INTEGER)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY AUTOINCREMENT, game_id TEXT, turn INTEGER, scores TEXT, notes TEXT, logged_at TIMESTAMP, FOREIGN KEY (game_id) REFERENCES games (game_id))''')
+    
+    # Create games table
+    c.execute('''CREATE TABLE IF NOT EXISTS games
+                 (game_id TEXT PRIMARY KEY, 
+                  config TEXT,
+                  players TEXT,
+                  created_at TIMESTAMP,
+                  created_by INTEGER)''')
+    
+    # Create logs table  
+    c.execute('''CREATE TABLE IF NOT EXISTS logs
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  game_id TEXT,
+                  turn INTEGER,
+                  scores TEXT,
+                  notes TEXT,
+                  logged_at TIMESTAMP,
+                  FOREIGN KEY (game_id) REFERENCES games (game_id))''')
+    
     conn.commit()
     conn.close()
 
