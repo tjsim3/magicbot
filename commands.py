@@ -249,7 +249,6 @@ async def setup_commands(bot):
             await ctx.send("❌ Scores must be integers")
             return
         
-        # Rest of your existing log logic...
         try:
             conn = get_db_connection()
             c = conn.cursor()
