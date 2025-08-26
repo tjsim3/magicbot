@@ -26,7 +26,7 @@ async def setup_events(bot):
         # Set bot status
         activity = discord.Activity(
             type=discord.ActivityType.watching,
-            name=f"{len(bot.guilds)} servers | !helpme"
+            name=f"{len(bot.guilds)} servers | %helpme"
         )
         await bot.change_presence(activity=activity, status=discord.Status.online)
         
