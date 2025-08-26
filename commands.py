@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands, tasks
 from discord.ui import Button, View
-from discord_components import DiscordComponents, Button, ButtonStyle, Select, SelectOption
+#from discord_components import DiscordComponents, Button, ButtonStyle, Select, SelectOption
 from datetime import datetime, timedelta, timezone
 import asyncio
 from discord import ui, ButtonStyle
