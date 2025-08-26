@@ -385,12 +385,25 @@ async def setup_commands(bot):
             await ctx.send(f"❌ Error showing logs: {str(e)}")
     
     @bot.command(name='deletelog')
-    @commands.has_permissions(administrator=True)
-    async def delete_log(ctx, game_id: str):
-        """Delete a game log (Admin only). Usage: %deletelog gameID"""
+    async def delete_log(ctx, game_id: str = None):
+        """Delete a game log (Admin only). Usage: %deletelog [gameID]"""
+        # If no game ID provided, try to detect from channel name
+        if game_id is None:
+            game_id = get_game_id_from_channel(ctx.channel.name)
+            if game_id is None:
+                await ctx.send("❌ No game ID provided and couldn't find one in channel name!")
+                return
+        
         try:
             conn = get_db_connection()
             c = conn.cursor()
+            
+            # Check if game exists first
+            c.execute("SELECT game_id FROM games WHERE game_id = ?", (game_id,))
+            if not c.fetchone():
+                await ctx.send(f"❌ Game {game_id} not found!")
+                conn.close()
+                return
             
             # Delete logs and game
             c.execute("DELETE FROM logs WHERE game_id = ?", (game_id,))
