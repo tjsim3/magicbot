@@ -5,7 +5,7 @@ from discord.ext import commands
 from commands import setup_commands  # Changed from bot.commands
 from events import setup_events      # Changed from bot.events
 from models import create_app
-from discord_components import DiscordComponents
+#from discord_components import DiscordComponents
 
 # Bot configuration
 intents = discord.Intents.default()
@@ -16,7 +16,7 @@ intents.members = True  # Enable if you need member-related events
 # Create bot instance
 bot = commands.Bot(command_prefix='%', intents=intents)
 
-DiscordComponents(bot)
+#DiscordComponents(bot)
 
 async def main():
     """Main function to start the bot"""
