@@ -215,19 +215,42 @@ async def setup_commands(bot):
             await ctx.send(f"❌ Error creating log: {str(e)}")
     
     @bot.command(name='log')
-    async def add_log(ctx, scores: str, notes: str = "No notes", game_id: str = None):
-        """Add turn log to a game. Usage: %log "10,20,30,40" "Some notes" [gameID]"""
-        # Get game ID from channel name if not provided
-        if game_id is None:
-            game_id = get_game_id_from_channel(ctx.channel.name)
-            if game_id is None:
-                await ctx.send("❌ No game ID provided and couldn't find one in channel name!")
-                return
+    async def add_log(ctx, *args):
+        """Add turn log to a game. Usage: %log score1 score2 score3 score4 [notes] [gameID]"""
+        # Get game ID from channel name first
+        game_id = get_game_id_from_channel(ctx.channel.name)
         
+        # Parse arguments
+        scores = []
+        notes = "No notes"
+        provided_game_id = None
+        
+        # Check if last argument is a game ID (3+ digits)
+        if args and args[-1].isdigit() and len(args[-1]) >= 3:
+            provided_game_id = args[-1]
+            args = args[:-1]
+        
+        # Use provided game ID or channel-detected game ID
+        game_id = provided_game_id or game_id
+        
+        if game_id is None:
+            await ctx.send("❌ No game ID provided and couldn't find one in channel name!")
+            return
+        
+        # Check if there are notes (non-numeric argument)
+        if args and not args[-1].isdigit():
+            notes = args[-1]
+            args = args[:-1]
+        
+        # The remaining args should be scores
         try:
-            # Parse scores
-            score_list = [int(s.strip()) for s in scores.split(',')]
-            
+            scores = [int(arg) for arg in args]
+        except ValueError:
+            await ctx.send("❌ Scores must be integers")
+            return
+        
+        # Rest of your existing log logic...
+        try:
             conn = get_db_connection()
             c = conn.cursor()
             
@@ -243,8 +266,8 @@ async def setup_commands(bot):
             config = game[0]
             expected_scores = 4 if config.lower() == '2v2' else 6
             
-            if len(score_list) != expected_scores:
-                await ctx.send(f"❌ {config} requires {expected_scores} scores, got {len(score_list)}")
+            if len(scores) != expected_scores:
+                await ctx.send(f"❌ {config} requires {expected_scores} scores, got {len(scores)}")
                 conn.close()
                 return
             
@@ -255,23 +278,23 @@ async def setup_commands(bot):
             # Insert log
             c.execute('''INSERT INTO logs (game_id, turn, scores, notes, logged_at)
                          VALUES (?, ?, ?, ?, ?)''',
-                     (game_id, next_turn, json.dumps(score_list), notes, datetime.now()))
+                     (game_id, next_turn, json.dumps(scores), notes, datetime.now()))
             
             conn.commit()
+            
+            # Show confirmation
+            c.execute("SELECT players FROM games WHERE game_id = ?", (game_id,))
+            players_json = c.fetchone()[0]
+            players = json.loads(players_json)
+            
+            confirmation = f"✅ **Turn {next_turn} logged successfully for game {game_id}:**\n"
+            confirmation += "\n".join(f"{players[i]}: {scores[i]}" for i in range(len(scores)))
+            if notes and notes != "No notes":
+                confirmation += f"\n*Notes:* {notes}"
+            
+            await ctx.send(confirmation)
             conn.close()
             
-            await ctx.send(f"✅ Turn {next_turn} logged for game {game_id}")
-            if latest_turn:
-                turn, scores_json, notes = latest_turn
-                scores = json.loads(scores_json)
-                confirmation = f"✅ **Turn {turn} logged successfully:**\n"
-                confirmation += "\n".join(f"Player {i+1}: {score}" for i, score in enumerate(scores))
-                if notes and notes != "No notes":
-                    confirmation += f"\n*Notes:* {notes}"
-                await ctx.send(confirmation)
-            
-        except ValueError:
-            await ctx.send("❌ Scores must be integers separated by commas")
         except Exception as e:
             await ctx.send(f"❌ Error adding log: {str(e)}")
     
