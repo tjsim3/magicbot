@@ -171,10 +171,10 @@ async def setup_commands(bot):
         # Separate players from optional game_id
         if players_and_id and players_and_id[-1].isdigit() and len(players_and_id[-1]) >= 3:
             game_id = players_and_id[-1]
-            players = list(players_and_id[:-1])
+            players_list = list(players_and_id[:-1])  # Changed variable name
         else:
             game_id = get_game_id_from_channel(ctx.channel.name)
-            players = list(players_and_id)
+            players_list = list(players_and_id)  # Changed variable name
         
         if game_id is None:
             await ctx.send("❌ No game ID provided and couldn't find one in channel name!")
@@ -186,10 +186,9 @@ async def setup_commands(bot):
             return
         
         expected_players = 4 if config.lower() == '2v2' else 6
-        if len(players) != expected_players:
-            await ctx.send(f"❌ {config} requires {expected_players} players, got {len(players)}")
+        if len(players_list) != expected_players:  # Changed variable name
+            await ctx.send(f"❌ {config} requires {expected_players} players, got {len(players_list)}")  # Changed variable name
             return
-
         
         try:
             conn = get_db_connection()
@@ -202,15 +201,15 @@ async def setup_commands(bot):
                 conn.close()
                 return
             
-            # Insert new game
+            # Insert new game - USE players_list instead of player_list
             c.execute('''INSERT INTO games (game_id, config, players, created_at, created_by)
                          VALUES (?, ?, ?, ?, ?)''',
-                     (game_id, config, json.dumps(player_list), datetime.now(), ctx.author.id))
+                     (game_id, config, json.dumps(players_list), datetime.now(), ctx.author.id))  # Changed variable name
             
             conn.commit()
             conn.close()
             
-            await ctx.send(f"✅ Game log created for {config} game {game_id} with players: {', '.join(player_list)}")
+            await ctx.send(f"✅ Game log created for {config} game {game_id} with players: {', '.join(players_list)}")  # Changed variable name
             
         except Exception as e:
             await ctx.send(f"❌ Error creating log: {str(e)}")
