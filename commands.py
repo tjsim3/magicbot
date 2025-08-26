@@ -16,6 +16,108 @@ from datetime import datetime
 
 
 #button classes
+class MapSelectView(ui.View):
+    def __init__(self, ctx, timeout=60):
+        super().__init__(timeout=timeout)
+        self.ctx = ctx
+        self.map_name = None
+        self.value = None
+    
+    @ui.button(label="Pangea", style=ButtonStyle.primary)
+    async def pangea(self, interaction: discord.Interaction, button: ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("❌ Only the command author can interact!", ephemeral=True)
+            return
+        self.map_name = "pangea"
+        self.value = True
+        self.stop()
+        await interaction.response.defer()
+    
+    @ui.button(label="Archi", style=ButtonStyle.primary)
+    async def archi(self, interaction: discord.Interaction, button: ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("❌ Only the command author can interact!", ephemeral=True)
+            return
+        self.map_name = "archi"
+        self.value = True
+        self.stop()
+        await interaction.response.defer()
+    
+    @ui.button(label="Conti", style=ButtonStyle.primary)
+    async def conti(self, interaction: discord.Interaction, button: ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("❌ Only the command author can interact!", ephemeral=True)
+            return
+        self.map_name = "conti"
+        self.value = True
+        self.stop()
+        await interaction.response.defer()
+    
+    @ui.button(label="Dry", style=ButtonStyle.primary)
+    async def dry(self, interaction: discord.Interaction, button: ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("❌ Only the command author can interact!", ephemeral=True)
+            return
+        self.map_name = "dry"
+        self.value = True
+        self.stop()
+        await interaction.response.defer()
+    
+    @ui.button(label="Lakes", style=ButtonStyle.primary)
+    async def lakes(self, interaction: discord.Interaction, button: ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("❌ Only the command author can interact!", ephemeral=True)
+            return
+        self.map_name = "lakes"
+        self.value = True
+        self.stop()
+        await interaction.response.defer()
+    
+    @ui.button(label="Cancel", style=ButtonStyle.danger)
+    async def cancel(self, interaction: discord.Interaction, button: ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("❌ Only the command author can interact!", ephemeral=True)
+            return
+        self.value = False
+        self.stop()
+        await interaction.response.defer()
+
+class GameSizeView(ui.View):
+    def __init__(self, ctx, timeout=60):
+        super().__init__(timeout=timeout)
+        self.ctx = ctx
+        self.game_size = None
+        self.value = None
+    
+    @ui.button(label="2v2", style=ButtonStyle.primary)
+    async def two_v_two(self, interaction: discord.Interaction, button: ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("❌ Only the command author can interact!", ephemeral=True)
+            return
+        self.game_size = "2v2"
+        self.value = True
+        self.stop()
+        await interaction.response.defer()
+    
+    @ui.button(label="3v3", style=ButtonStyle.primary)
+    async def three_v_three(self, interaction: discord.Interaction, button: ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("❌ Only the command author can interact!", ephemeral=True)
+            return
+        self.game_size = "3v3"
+        self.value = True
+        self.stop()
+        await interaction.response.defer()
+    
+    @ui.button(label="Cancel", style=ButtonStyle.danger)
+    async def cancel(self, interaction: discord.Interaction, button: ui.Button):
+        if interaction.user.id != self.ctx.author.id:
+            await interaction.response.send_message("❌ Only the command author can interact!", ephemeral=True)
+            return
+        self.value = False
+        self.stop()
+        await interaction.response.defer()
+
 class ConfigView(ui.View):
     def __init__(self, ctx, timeout=60):
         super().__init__(timeout=timeout)
@@ -779,11 +881,12 @@ async def setup_commands(bot):
 
     #----------------- TRIBE DETECTOR COMMAND-----------
     @bot.command(name='detect')
-    async def detect_tribes(ctx, map_name: str, game_size: str, max_points: int, *enemy_scores):
+    async def detect_tribes(ctx, map_name: str = None, game_size: str = None, max_points: int = None, *enemy_scores):
         """
-        Detect opponent tribes with advanced filtering. Usage:
+        Detect opponent tribes with interactive guidance. Usage:
         %detect pangea 3v3 12 515 620 630
         %detect archi 2v2 10 515 620
+        Or just %detect for interactive mode
         """
         # Check if user has Spellkeeper role
         spellkeeper_role = discord.utils.get(ctx.author.roles, name="Spellkeeper")
@@ -791,101 +894,167 @@ async def setup_commands(bot):
             await ctx.send("❌ You need the **Spellkeeper** role to use this command!")
             return
         
-        # Input validation - remove quotes if user added them
-        map_name = map_name.strip('"\'')
-        game_size = game_size.strip('"\'')
-        
-        # Map name aliases and auto-correction
-        map_aliases = {
-            'pang': 'pangea', 'pangea': 'pangea',
-            'arch': 'archi', 'archi': 'archi', 'archipelago': 'archi',
-            'cont': 'conti', 'conti': 'conti', 'continents': 'conti',
-            'dry': 'dry', 'dryland': 'dry',
-            'lake': 'lakes', 'lakes': 'lakes'
-        }
-        
-        # Game size aliases
-        game_aliases = {
-            '2v2': '2v2', '2': '2v2', '22': '2v2',
-            '3v3': '3v3', '3': '3v3', '33': '3v3'
-        }
-        
-        # Auto-correct map name
-        map_name_lower = map_name.lower()
-        if map_name_lower in map_aliases:
-            map_name = map_aliases[map_name_lower]
-        else:
-            await ctx.send(f"❌ Invalid map: {map_name}. Valid maps: pangea, archi, conti, dry, lakes")
+        # Interactive mode if no arguments provided
+        if map_name is None:
+            await start_interactive_detect(ctx)
             return
         
-        # Auto-correct game size
-        game_size_lower = game_size.lower()
-        if game_size_lower in game_aliases:
-            game_size = game_aliases[game_size_lower]
-        else:
-            await ctx.send("❌ Game size must be '2v2' or '3v3'")
+        # Otherwise proceed with normal command processing
+        # ... (your existing detect logic) ...
+    
+    async def start_interactive_detect(ctx):
+        """Interactive tribe detection with native Discord buttons"""
+        # Step 1: Map selection
+        embed = discord.Embed(
+            title="🔍 Tribe Detection - Step 1/4",
+            description="Select the map type:",
+            color=0x00ff00
+        )
+        embed.add_field(name="Pangea", value="Standard land map", inline=True)
+        embed.add_field(name="Archi", value="Island-based map", inline=True)
+        embed.add_field(name="Conti", value="Large continents", inline=True)
+        embed.add_field(name="Dry", value="Arid environment", inline=True)
+        embed.add_field(name="Lakes", value="Water-rich map", inline=True)
+        
+        view = MapSelectView(ctx)
+        message = await ctx.send(embed=embed, view=view)
+        
+        # Wait for map selection
+        await view.wait()
+        
+        if view.value is False or view.map_name is None:
+            await message.edit(content="❌ Tribe detection cancelled.", embed=None, view=None)
             return
         
-        expected_count = 2 if game_size == "2v2" else 3
-        if len(enemy_scores) != expected_count:
-            await ctx.send(f"❌ {game_size} requires {expected_count} enemy scores, got {len(enemy_scores)}")
+        map_name = view.map_name
+        
+        # Step 2: Game size selection
+        embed = discord.Embed(
+            title="🔍 Tribe Detection - Step 2/4",
+            description=f"**Map:** {map_name.title()}\n\nSelect the game size:",
+            color=0x00ff00
+        )
+        
+        size_view = GameSizeView(ctx)
+        await message.edit(embed=embed, view=size_view)
+        
+        # Wait for game size selection
+        await size_view.wait()
+        
+        if size_view.value is False or size_view.game_size is None:
+            await message.edit(content="❌ Tribe detection cancelled.", embed=None, view=None)
             return
         
-        # Convert scores to integers (remove quotes if any)
+        game_size = size_view.game_size
+        expected_scores = 2 if game_size == "2v2" else 3
+        
+        # Step 3: Get max points
+        embed = discord.Embed(
+            title="🔍 Tribe Detection - Step 3/4",
+            description=f"**Map:** {map_name.title()}\n**Game Size:** {game_size.upper()}\n\nEnter the maximum tribe points allowed (1-20):",
+            color=0x00ff00
+        )
+        embed.add_field(name="Typical Values", value="2v2: 8-12 points\n3v3: 10-15 points", inline=False)
+        
+        await message.edit(embed=embed, view=None)
+        
+        # Wait for max points input
         try:
-            enemy_scores_int = []
-            for score in enemy_scores:
-                clean_score = str(score).strip('"\'')
-                enemy_scores_int.append(int(clean_score))
-        except ValueError:
-            await ctx.send("❌ Enemy scores must be integers")
-            return
-        
-        # Validate scores are within possible range (accounting for corner spawns -5)
-        base_valid_scores = [415, 465, 515, 520, 530, 615, 620, 630, 730]
-        corner_valid_scores = [score - 5 for score in base_valid_scores if score - 5 >= 0]
-        all_valid_scores = list(set(base_valid_scores + corner_valid_scores))
-        all_valid_scores.sort()
-        
-        for score in enemy_scores_int:
-            if score not in all_valid_scores:
-                await ctx.send(f"❌ Invalid score: {score}. Valid scores are: {', '.join(map(str, all_valid_scores))}")
-                return
-        
-        # Validate max points is reasonable
-        if max_points < 1 or max_points > 20:
-            await ctx.send("❌ Max points must be between 1 and 20")
-            return
-        
-        # Show processing message for long operations
-        processing_msg = await ctx.send("🔍 Analyzing possible tribe combinations...")
-        
-        # Call the detection with enhanced filtering
-        try:
-            result = detect_tribes_for_discord(
-                map_name, game_size, max_points, enemy_scores_int,
-                consider_corner_spawns=True,
-                min_points_threshold=2
+            points_msg = await bot.wait_for(
+                "message",
+                check=lambda m: m.author.id == ctx.author.id and m.channel.id == ctx.channel.id,
+                timeout=60.0
             )
             
-            # Delete processing message
-            await processing_msg.delete()
-            
-            # Split long messages if needed
-            if len(result) > 2000:
-                parts = [result[i:i+2000] for i in range(0, len(result), 2000)]
-                for part in parts:
-                    await ctx.send(part)
-                    await asyncio.sleep(1)
-            else:
-                await ctx.send(result)
-                
-        except Exception as e:
             try:
-                await processing_msg.delete()
-            except:
-                pass
-            await ctx.send(f"❌ Error in tribe detection: {str(e)}")
+                max_points = int(points_msg.content.strip())
+                if max_points < 1 or max_points > 20:
+                    await ctx.send("❌ Max points must be between 1 and 20. Please try again.")
+                    return
+            except ValueError:
+                await ctx.send("❌ Max points must be a number. Please try again.")
+                return
+            
+            # Step 4: Get enemy scores
+            embed = discord.Embed(
+                title="🔍 Tribe Detection - Step 4/4",
+                description=f"**Map:** {map_name.title()}\n**Game Size:** {game_size.upper()}\n**Max Points:** {max_points}\n\nEnter the enemy starting scores (separated by spaces):",
+                color=0x00ff00
+            )
+            embed.add_field(
+                name="Example", 
+                value="515 620 630" if game_size == "3v3" else "515 620",
+                inline=False
+            )
+            embed.add_field(
+                name="Valid Scores", 
+                value="415, 465, 515, 520, 530, 615, 620, 630, 730\n(Note: Corner spawns = score -5)",
+                inline=False
+            )
+            
+            await message.edit(embed=embed, view=None)
+            
+            # Wait for scores input
+            try:
+                scores_msg = await bot.wait_for(
+                    "message",
+                    check=lambda m: m.author.id == ctx.author.id and m.channel.id == ctx.channel.id,
+                    timeout=120.0
+                )
+                
+                # Parse scores
+                scores_text = scores_msg.content.strip()
+                enemy_scores = []
+                for score in scores_text.split():
+                    try:
+                        enemy_scores.append(int(score))
+                    except ValueError:
+                        await ctx.send(f"❌ Invalid score: {score}. Scores must be numbers.")
+                        return
+                
+                # Validate score count
+                if len(enemy_scores) != expected_scores:
+                    await ctx.send(f"❌ {game_size} requires {expected_scores} enemy scores, got {len(enemy_scores)}")
+                    return
+                
+                # Validate scores are within possible range
+                valid_scores = [415, 465, 515, 520, 530, 615, 620, 630, 730, 410, 460, 510, 515, 525, 610, 615, 625, 725]
+                for score in enemy_scores:
+                    if score not in valid_scores:
+                        await ctx.send(f"❌ Invalid score: {score}. Valid scores: 415, 465, 515, 520, 530, 615, 620, 630, 730 (corner spawns: -5)")
+                        return
+                
+                # Process the detection
+                await message.edit(content="🔍 Analyzing possible tribe combinations...", embed=None, view=None)
+                
+                # Call your existing detection function
+                result = detect_tribes_for_discord(
+                    map_name, game_size, max_points, enemy_scores,
+                    consider_corner_spawns=True,
+                    min_points_threshold=2
+                )
+                
+                # Clean up input messages
+                try:
+                    await points_msg.delete()
+                    await scores_msg.delete()
+                except:
+                    pass
+                
+                # Send results
+                if len(result) > 2000:
+                    parts = [result[i:i+2000] for i in range(0, len(result), 2000)]
+                    for part in parts:
+                        await ctx.send(part)
+                        await asyncio.sleep(1)
+                else:
+                    await ctx.send(result)
+                    
+            except asyncio.TimeoutError:
+                await message.edit(content="⏰ Score input timed out. Please try `%detect` again.", embed=None, view=None)
+                
+        except asyncio.TimeoutError:
+            await message.edit(content="⏰ Points input timed out. Please try `%detect` again.", embed=None, view=None)
 
     
     # ---------------- REMINDER COMMANDS ----------------
