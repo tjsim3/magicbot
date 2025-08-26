@@ -45,6 +45,47 @@ def init_database():
 
 
 # Helper functions
+async def can_use_log_commands(ctx):
+    """Check if user is admin or teammate in this PolyELO game channel"""
+    # Allow admins
+    if ctx.author.guild_permissions.administrator:
+        return True
+    
+    # Check if this is a PolyELO game channel by looking for game ID
+    game_id = get_game_id_from_channel(ctx.channel.name)
+    if not game_id:
+        return False
+    
+    # Get the last 100 messages to find the PolyELO team announcement
+    try:
+        async for message in ctx.channel.history(limit=100):
+            if message.author.bot and "Your teammates are" in message.content:
+                # Extract user IDs from the message
+                import re
+                user_ids = re.findall(r'<@!?(\d+)>', message.content)
+                
+                # Check if current user is one of the teammates
+                if str(ctx.author.id) in user_ids:
+                    return True
+                
+                # Also check if user is mentioned in the teams section
+                teams_section = re.search(r'Side.*?:(.*?)(?=Side|$)', message.content, re.DOTALL)
+                if teams_section:
+                    team_text = teams_section.group(1)
+                    # Check if user's display name appears in the team roster
+                    author_display_name = ctx.author.display_name
+                    if author_display_name in team_text:
+                        return True
+                
+                break  # Stop after finding the PolyELO message
+        
+        return False
+        
+    except Exception as e:
+        print(f"Error checking PolyELO permissions: {e}")
+        return False
+            
+
 def get_game_id_from_channel(channel_name):
     """Extract 6-digit game ID from channel name"""
     # Look for exactly 6 consecutive digits
@@ -163,8 +204,10 @@ async def setup_commands(bot):
 
     #----------------- BOT COMMANDS --------------------
 
-    #----------------- LOG COMMANDS
+    #----------------- LOG COMMANDS --------------------
+
     @bot.command(name='createlog')
+    @commands.check(can_use_log_commands)
     async def create_log(ctx, config: str, *players_and_id):
         """Create a new game log. Usage: %createlog 2v2 player1 player2 player3 player4 [gameID]"""
         # Separate players from optional game_id
@@ -214,6 +257,7 @@ async def setup_commands(bot):
             await ctx.send(f"❌ Error creating log: {str(e)}")
     
     @bot.command(name='log')
+    @commands.check(can_use_log_commands)
     async def add_log(ctx, *args):
         """Add turn log to a game. Usage: %log score1 score2 score3 score4 [notes] [gameID]"""
         # Get game ID from channel name first
@@ -297,6 +341,7 @@ async def setup_commands(bot):
             await ctx.send(f"❌ Error adding log: {str(e)}")
     
     @bot.command(name='showlogs')
+    @commands.check(can_use_log_commands)
     async def show_logs(ctx, game_id: str = None, turn_range: str = None):
         """Show logs for a game. Usage: %showlogs [gameID] [turn|start-end]"""
         # Get game ID from channel name if not provided
@@ -385,6 +430,7 @@ async def setup_commands(bot):
             await ctx.send(f"❌ Error showing logs: {str(e)}")
     
     @bot.command(name='deletelog')
+    @commands.check(can_use_log_commands)
     async def delete_log(ctx, game_id: str = None):
         """Delete a game log (Admin only). Usage: %deletelog [gameID]"""
         # If no game ID provided, try to detect from channel name
@@ -418,6 +464,7 @@ async def setup_commands(bot):
             await ctx.send(f"❌ Error deleting log: {str(e)}")
     
     @bot.command(name='editlog')
+    @commands.check(can_use_log_commands)
     async def edit_log(ctx, turn: int, scores: str, notes: str = "No notes", game_id: str = None):
         """Edit a specific turn log. Usage: %editlog 5 "10,20,30,40" "New notes" [gameID]"""
         # Get game ID from channel name if not provided
@@ -977,6 +1024,7 @@ async def setup_commands(bot):
         await ctx.send(embed=embed)
 
     @bot.command(name='setemojis')
+    @commands.check(can_use_log_commands)
     async def emojis_command(ctx, emoji1: str, emoji2: str, emoji3: str = None, emoji4: str = None):
         """
         Replace emojis at the beginning of the channel name.
