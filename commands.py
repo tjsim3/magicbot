@@ -74,6 +74,7 @@ def create_duel_embed(title, description, color):
 
 async def setup_commands(bot):
     """Setup all bot commands"""
+    init_database()
     global signup_message_id, signups
     
     # Get configuration from environment variables
@@ -1315,7 +1316,6 @@ bot.start_time = time.time()
 @bot.event
 async def on_ready():
     print(f'{bot.user} has connected to Discord!')
-    init_database()
     await bot.change_presence(
         activity=discord.Activity(
             type=discord.ActivityType.watching,  
