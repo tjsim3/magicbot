@@ -1,97 +1,34 @@
 import os
+import json
 import sqlite3
 from datetime import datetime, timezone
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, BigInteger, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, BigInteger, Text
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship, scoped_session
+from sqlalchemy.orm import sessionmaker, scoped_session
 
 # Use declarative base for SQLAlchemy
 Base = declarative_base()
 
-class DuelPlayer(Base):
-    __tablename__ = 'duel_players'
+class Game(Base):
+    __tablename__ = 'games'
     
-    id = Column(BigInteger, primary_key=True)  # Discord user ID
-    username = Column(String(100), nullable=False)
-    total_wins = Column(Integer, default=0)
-    total_losses = Column(Integer, default=0)
-    total_draws = Column(Integer, default=0)
-    games_played = Column(Integer, default=0)
+    game_id = Column(String(20), primary_key=True)  # 6-digit game ID
+    config = Column(String(10), nullable=False)     # '2v2' or '3v3'
+    players = Column(Text, nullable=False)          # JSON string of player list
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    last_active = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    
-    # Relationships
-    challenger_duels = relationship("ActiveDuel", foreign_keys="ActiveDuel.challenger_id", back_populates="challenger")
-    opponent_duels = relationship("ActiveDuel", foreign_keys="ActiveDuel.opponent_id", back_populates="opponent")
-    
-    def __repr__(self):
-        return f'<DuelPlayer {self.username}>'
+    created_by = Column(BigInteger, nullable=False) # Discord user ID
 
-
-class ActiveDuel(Base):
-    __tablename__ = 'active_duels'
+class GameLog(Base):
+    __tablename__ = 'logs'
     
     id = Column(Integer, primary_key=True)
-    challenger_id = Column(BigInteger, ForeignKey('duel_players.id'), nullable=False)
-    opponent_id = Column(BigInteger, ForeignKey('duel_players.id'), nullable=False)
-    
-    # HP System
-    challenger_hp = Column(Integer, default=3)
-    opponent_hp = Column(Integer, default=3)
-    
-    # Turn System
-    current_turn = Column(String(20))  # 'challenger' or 'opponent'
-    turn_deadline = Column(DateTime)  # 12-hour deadline for current turn
-    
-    # Current Turn Spells
-    challenger_spell = Column(String(50), nullable=True)
-    opponent_spell = Column(String(50), nullable=True)
-    
-    # Game Status
-    status = Column(String(20), default='active')  # 'active', 'finished', 'expired'
-    winner_id = Column(BigInteger, nullable=True)
-    
-    # Timestamps
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    last_action = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    
-    # Relationships
-    challenger = relationship("DuelPlayer", foreign_keys=[challenger_id], back_populates="challenger_duels")
-    opponent = relationship("DuelPlayer", foreign_keys=[opponent_id], back_populates="opponent_duels")
-    
-    def __repr__(self):
-        return f'<ActiveDuel {self.challenger.username if self.challenger else "Unknown"} vs {self.opponent.username if self.opponent else "Unknown"}>'
+    game_id = Column(String(20), nullable=False)    # 6-digit game ID
+    turn = Column(Integer, nullable=False)          # Turn number (starts at 0)
+    scores = Column(Text, nullable=False)           # JSON string of scores
+    notes = Column(Text, default="No notes")
+    logged_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
-
-class DuelHistory(Base):
-    __tablename__ = 'duel_history'
-    
-    id = Column(Integer, primary_key=True)
-    challenger_id = Column(BigInteger, ForeignKey('duel_players.id'), nullable=False)
-    opponent_id = Column(BigInteger, ForeignKey('duel_players.id'), nullable=False)
-    winner_id = Column(BigInteger, ForeignKey('duel_players.id'), nullable=True)
-    
-    # Final Stats
-    challenger_hp_final = Column(Integer)
-    opponent_hp_final = Column(Integer)
-    total_rounds = Column(Integer)
-    duration_minutes = Column(Integer)
-    
-    # Game Result
-    result = Column(String(20))  # 'challenger_win', 'opponent_win', 'draw', 'timeout'
-    
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    
-    # Relationships
-    challenger = relationship("DuelPlayer", foreign_keys=[challenger_id])
-    opponent = relationship("DuelPlayer", foreign_keys=[opponent_id])
-    winner = relationship("DuelPlayer", foreign_keys=[winner_id])
-    
-    def __repr__(self):
-        return f'<DuelHistory {self.result}>'
-
-
-# Database setup without Flask
+# Database setup
 def get_database_url():
     """Get database URL from environment or use SQLite"""
     if os.environ.get('DATABASE_URL'):
@@ -99,7 +36,7 @@ def get_database_url():
     else:
         # Use SQLite as fallback
         os.makedirs('data', exist_ok=True)
-        return 'sqlite:///data/duels.db'
+        return 'sqlite:///data/gamelogs.db'
 
 # Create engine and session
 engine = create_engine(
@@ -116,68 +53,70 @@ def init_database():
     """Initialize database tables"""
     try:
         Base.metadata.create_all(engine)
-        print("✅ Database tables created successfully!")
+        print("✅ Game log database tables created successfully!")
         return True
     except Exception as e:
         print(f"❌ Database initialization failed: {e}")
         return False
 
-def get_or_create_player(discord_id, username):
-    """Get or create a player in the database"""
-    try:
-        player = db_session.query(DuelPlayer).filter_by(id=discord_id).first()
-        if not player:
-            player = DuelPlayer(id=discord_id, username=username)
-            db_session.add(player)
-            db_session.commit()
-        return player
-    except Exception as e:
-        print(f"❌ Error getting/creating player: {e}")
-        # Create a simple player object without database if needed
-        return type('SimplePlayer', (), {'id': discord_id, 'username': username})()
+# Helper functions for game logs
+def get_db_connection():
+    """Get a raw SQLite connection for compatibility with existing code"""
+    if 'sqlite' in get_database_url():
+        # Extract the SQLite file path
+        db_path = get_database_url().replace('sqlite:///', '')
+        return sqlite3.connect(db_path)
+    else:
+        # For other databases, we'd need a different approach
+        # This is a simple fallback that might need adjustment
+        import tempfile
+        return sqlite3.connect(tempfile.NamedTemporaryFile(delete=False).name)
 
-def cleanup_expired_duels():
-    """Clean up duels where turn deadline has passed"""
+def game_exists(game_id):
+    """Check if a game exists"""
     try:
-        now = datetime.now(timezone.utc)
-        expired_duels = db_session.query(ActiveDuel).filter(
-            ActiveDuel.turn_deadline < now,
-            ActiveDuel.status == 'active'
-        ).all()
-        
-        for duel in expired_duels:
-            duel.status = 'expired'
-        
-        db_session.commit()
-        return len(expired_duels)
+        game = db_session.query(Game).filter_by(game_id=game_id).first()
+        return game is not None
     except Exception as e:
-        print(f"❌ Error cleaning up expired duels: {e}")
-        return 0
+        print(f"❌ Error checking if game exists: {e}")
+        return False
 
-def get_player_stats(discord_id):
-    """Get player statistics"""
+def get_game(game_id):
+    """Get a game by ID"""
     try:
-        player = db_session.query(DuelPlayer).filter_by(id=discord_id).first()
-        if not player:
-            return None
-        
-        if player.games_played > 0:
-            win_rate = (player.total_wins / player.games_played) * 100
-        else:
-            win_rate = 0
-        
-        return {
-            'player': player,
-            'win_rate': win_rate
-        }
+        return db_session.query(Game).filter_by(game_id=game_id).first()
     except Exception as e:
-        print(f"❌ Error getting player stats: {e}")
+        print(f"❌ Error getting game: {e}")
         return None
+
+def get_game_logs(game_id, start_turn=None, end_turn=None):
+    """Get logs for a game, optionally filtered by turn range"""
+    try:
+        query = db_session.query(GameLog).filter_by(game_id=game_id)
+        
+        if start_turn is not None and end_turn is not None:
+            query = query.filter(GameLog.turn.between(start_turn, end_turn))
+        elif start_turn is not None:
+            query = query.filter(GameLog.turn == start_turn)
+            
+        return query.order_by(GameLog.turn).all()
+    except Exception as e:
+        print(f"❌ Error getting game logs: {e}")
+        return []
+
+def get_max_turn(game_id):
+    """Get the maximum turn number for a game"""
+    try:
+        max_turn = db_session.query(GameLog.turn).filter_by(game_id=game_id).order_by(GameLog.turn.desc()).first()
+        return max_turn[0] if max_turn else -1
+    except Exception as e:
+        print(f"❌ Error getting max turn: {e}")
+        return -1
 
 # Initialize database on import
 try:
     init_database()
-    print("✅ Database module loaded successfully!")
+    print("✅ Game log database module loaded successfully!")
 except Exception as e:
     print(f"⚠️ Database module loaded with warning: {e}")
 
