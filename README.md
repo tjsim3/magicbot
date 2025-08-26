@@ -23,3 +23,12 @@
 - `%ping` - Check bot latency and responsiveness
 - `%info` - Display bot information and statistics
 - `%server` - Show current server information
+
+### Detect Commands
+- `%detect` - Detect scores for enemy tribes
+
+### Log Commands
+- `%createlog` - Create log
+- `%showlogs` - Show logs
+- `%log` - Log a turn
+- `%editlog` - Edit log for a turn
