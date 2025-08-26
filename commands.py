@@ -4,6 +4,7 @@ from discord.ui import Button, View
 from discord_components import DiscordComponents, Button, ButtonStyle, Select, SelectOption
 from datetime import datetime, timedelta, timezone
 import asyncio
+from discord import ui, ButtonStyle
 import random
 import os
 import time
@@ -222,15 +223,8 @@ async def setup_commands(bot):
         # ... (your existing createlog logic) ...
     
     async def start_interactive_createlog(ctx):
-        """Interactive create log with buttons"""
-        # Create buttons for config selection
-        config_buttons = [
-            Button(style=ButtonStyle.primary, label="2v2", custom_id="config_2v2"),
-            Button(style=ButtonStyle.primary, label="3v3", custom_id="config_3v3"),
-            Button(style=ButtonStyle.danger, label="Cancel", custom_id="config_cancel")
-        ]
-        
-        # Send initial message with buttons
+        """Interactive create log with native Discord buttons"""
+        # Step 1: Config selection
         embed = discord.Embed(
             title="🎮 Create Game Log - Step 1/3",
             description="Select the game configuration:",
@@ -240,47 +234,32 @@ async def setup_commands(bot):
         embed.add_field(name="3v3", value="6 players total", inline=True)
         embed.set_footer(text="This message will guide you through creating a game log.")
         
-        message = await ctx.send(embed=embed, components=[config_buttons])
+        view = ConfigView(ctx)
+        message = await ctx.send(embed=embed, view=view)
         
         # Wait for button click
-        try:
-            interaction = await bot.wait_for(
-                "button_click",
-                check=lambda i: i.message.id == message.id and i.user.id == ctx.author.id,
-                timeout=60.0
-            )
-            
-            if interaction.custom_id == "config_cancel":
-                await interaction.respond(content="❌ Game creation cancelled.")
-                return
-            
-            # Store selected config
-            config = "2v2" if interaction.custom_id == "config_2v2" else "3v3"
-            expected_players = 4 if config == "2v2" else 6
-            
-            # Step 2: Get players
-            await interaction.respond(content=f"✅ Selected: **{config}**")
-            await get_players_step(ctx, message, config, expected_players)
-            
-        except asyncio.TimeoutError:
-            await message.edit(components=[])
-            await ctx.send("⏰ Game creation timed out. Please try again.")
-    
-    async def get_players_step(ctx, message, config, expected_players):
-        """Step 2: Get player names"""
+        await view.wait()
+        
+        if view.value is False or view.config is None:
+            await message.edit(content="❌ Game creation cancelled.", embed=None, view=None)
+            return
+        
+        config = view.config
+        expected_players = 4 if config == "2v2" else 6
+        
+        # Step 2: Get players
         embed = discord.Embed(
             title=f"🎮 Create Game Log - Step 2/3",
-            description=f"**Configuration:** {config}\n\nPlease enter the player names (one per line) for all {expected_players} players:",
+            description=f"**Configuration:** {config}\n\nPlease enter the player names for all {expected_players} players (separated by commas or new lines):",
             color=0x00ff00
         )
         embed.add_field(
             name="Example", 
-            value="```player1\nplayer2\nplayer3\nplayer4```" if config == "2v2" else "```player1\nplayer2\nplayer3\nplayer4\nplayer5\nplayer6```",
+            value="```player1, player2, player3, player4```" if config == "2v2" else "```player1, player2, player3, player4, player5, player6```",
             inline=False
         )
-        embed.set_footer(text="Type the player names in chat. Use commas or new lines.")
         
-        await message.edit(embed=embed, components=[])
+        await message.edit(embed=embed, view=None)
         
         # Wait for player input
         try:
@@ -290,73 +269,51 @@ async def setup_commands(bot):
                 timeout=120.0
             )
             
-            # Parse players from message
+            # Parse players
             players_text = player_msg.content
-            players_list = []
+            players_list = [p.strip() for p in players_text.split(',') if p.strip()]
             
-            # Handle both comma-separated and newline-separated
-            if '\n' in players_text:
+            # Also check for newlines if commas didn't work
+            if len(players_list) != expected_players and '\n' in players_text:
                 players_list = [p.strip() for p in players_text.split('\n') if p.strip()]
-            else:
-                players_list = [p.strip() for p in players_text.split(',') if p.strip()]
             
             # Validate player count
             if len(players_list) != expected_players:
-                await ctx.send(f"❌ {config} requires {expected_players} players, but you provided {len(players_list)}. Please try again.")
-                await get_players_step(ctx, message, config, expected_players)
+                await ctx.send(f"❌ {config} requires {expected_players} players, but you provided {len(players_list)}. Please try `%createlog` again.")
                 return
             
             # Step 3: Confirm and create
-            await confirm_creation_step(ctx, message, config, players_list, player_msg)
+            game_id = get_game_id_from_channel(ctx.channel.name)
             
-        except asyncio.TimeoutError:
-            await ctx.send("⏰ Player input timed out. Please try again.")
-    
-    async def confirm_creation_step(ctx, message, config, players_list, player_msg):
-        """Step 3: Confirm and create the game"""
-        # Try to get game ID from channel
-        game_id = get_game_id_from_channel(ctx.channel.name)
-        
-        embed = discord.Embed(
-            title=f"🎮 Create Game Log - Step 3/3",
-            description="**Please review the details:**",
-            color=0x00ff00
-        )
-        embed.add_field(name="Configuration", value=config, inline=True)
-        embed.add_field(name="Game ID", value=game_id or "Auto-detected", inline=True)
-        embed.add_field(name="Players", value="\n".join(players_list), inline=False)
-        embed.set_footer(text="Confirm to create the game log.")
-        
-        confirm_buttons = [
-            Button(style=ButtonStyle.success, label="✅ Confirm", custom_id="confirm_create"),
-            Button(style=ButtonStyle.danger, label="❌ Cancel", custom_id="cancel_create")
-        ]
-        
-        await message.edit(embed=embed, components=[confirm_buttons])
-        
-        # Wait for confirmation
-        try:
-            interaction = await bot.wait_for(
-                "button_click",
-                check=lambda i: i.message.id == message.id and i.user.id == ctx.author.id,
-                timeout=60.0
+            embed = discord.Embed(
+                title=f"🎮 Create Game Log - Step 3/3",
+                description="**Please review the details:**",
+                color=0x00ff00
             )
+            embed.add_field(name="Configuration", value=config, inline=True)
+            embed.add_field(name="Game ID", value=game_id or "Auto-detected", inline=True)
+            embed.add_field(name="Players", value="\n".join(players_list), inline=False)
             
-            if interaction.custom_id == "cancel_create":
-                await interaction.respond(content="❌ Game creation cancelled.")
+            confirm_view = ConfirmView(ctx)
+            await message.edit(embed=embed, view=confirm_view)
+            
+            # Wait for confirmation
+            await confirm_view.wait()
+            
+            if confirm_view.value is False:
+                await message.edit(content="❌ Game creation cancelled.", embed=None, view=None)
                 return
             
             # Create the game
-            await interaction.respond(content="🔄 Creating game...")
+            await message.edit(content="🔄 Creating game...", embed=None, view=None)
             
             try:
                 conn = get_db_connection()
                 c = conn.cursor()
                 
-                # Use detected game ID or generate one if not available
-                final_game_id = game_id or str(ctx.channel.id)[-6:]  # Fallback to channel ID last 6 digits
+                final_game_id = game_id or str(ctx.channel.id)[-6:]
                 
-                # Check if game already exists
+                # Check if game exists
                 c.execute("SELECT game_id FROM games WHERE game_id = ?", (final_game_id,))
                 if c.fetchone():
                     await ctx.send(f"❌ Game {final_game_id} already exists!")
@@ -371,13 +328,13 @@ async def setup_commands(bot):
                 conn.commit()
                 conn.close()
                 
-                # Clean up player message
+                # Clean up
                 try:
                     await player_msg.delete()
                 except:
                     pass
                 
-                # Success message
+                # Success
                 success_embed = discord.Embed(
                     title="✅ Game Log Created Successfully!",
                     description=f"**Game ID:** {final_game_id}\n**Config:** {config}",
@@ -390,13 +347,13 @@ async def setup_commands(bot):
                     inline=False
                 )
                 
-                await message.edit(embed=success_embed, components=[])
+                await message.edit(content=None, embed=success_embed, view=None)
                 
             except Exception as e:
                 await ctx.send(f"❌ Error creating game: {str(e)}")
                 
         except asyncio.TimeoutError:
-            await ctx.send("⏰ Confirmation timed out. Please try again.")
+            await message.edit(content="⏰ Input timed out. Please try `%createlog` again.", embed=None, view=None)
     
     
     @bot.command(name='log')
