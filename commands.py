@@ -269,8 +269,8 @@ async def setup_commands(bot):
                 conn.close()
                 return
             
-            # Get next turn number
-            c.execute("SELECT COALESCE(MAX(turn), 0) + 1 FROM logs WHERE game_id = ?", (game_id,))
+            # Get next turn number - CHANGED TO START AT 0
+            c.execute("SELECT COALESCE(MAX(turn), -1) + 1 FROM logs WHERE game_id = ?", (game_id,))
             next_turn = c.fetchone()[0]
             
             # Insert log
@@ -355,7 +355,7 @@ async def setup_commands(bot):
             # Format output
             if not logs:
                 range_text = f" (turns {turn_range})" if turn_range else ""
-                await ctx.send(f"📝 Game {game_id} ({config}){range_text} - No logs found")
+                await ctx.send(f"📝 Game {game_id} ({config}){range_text} - No logs found\n**Players:** {', '.join(players)}")
                 return
             
             response = [f"**📝 Game {game_id} ({config}) - {len(logs)} turns**"]
