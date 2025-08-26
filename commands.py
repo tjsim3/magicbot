@@ -286,17 +286,39 @@ async def setup_commands(bot):
                 await ctx.send("❌ No game ID provided and couldn't find one in channel name!")
                 return
         
-        # Parse turn range if provided
-        start_turn = end_turn = None
-        if turn_range:
-            if '-' in turn_range:
-                start_turn, end_turn = map(int, turn_range.split('-'))
-            else:
-                start_turn = end_turn = int(turn_range)
-        
         try:
             conn = get_db_connection()
             c = conn.cursor()
+            
+            # Get game info FIRST
+            c.execute("SELECT config, players FROM games WHERE game_id = ?", (game_id,))
+            game = c.fetchone()
+            
+            if not game:
+                await ctx.send(f"❌ Game {game_id} not found!")
+                conn.close()
+                return
+            
+            config, players_json = game  # This defines 'config' variable
+            players = json.loads(players_json)
+            
+            # Parse turn range if provided
+            start_turn = end_turn = None
+            if turn_range:
+                if '-' in turn_range:
+                    try:
+                        start_turn, end_turn = map(int, turn_range.split('-'))
+                    except ValueError:
+                        await ctx.send("❌ Turn range must be in format 'start-end' (e.g., '3-7')")
+                        conn.close()
+                        return
+                else:
+                    try:
+                        start_turn = end_turn = int(turn_range)
+                    except ValueError:
+                        await ctx.send("❌ Turn must be a number")
+                        conn.close()
+                        return
             
             # Build query with optional turn filtering
             if start_turn is not None:
@@ -308,15 +330,17 @@ async def setup_commands(bot):
             
             c.execute(query, params)
             logs = c.fetchall()
-            
             conn.close()
             
             # Format output
             if not logs:
-                await ctx.send(f"📝 Game {game_id} ({config}) - No logs yet")
+                range_text = f" (turns {turn_range})" if turn_range else ""
+                await ctx.send(f"📝 Game {game_id} ({config}){range_text} - No logs found")
                 return
             
             response = [f"**📝 Game {game_id} ({config}) - {len(logs)} turns**"]
+            if turn_range:
+                response[0] += f" (showing {turn_range})"
             response.append(f"**Players:** {', '.join(players)}")
             response.append("")
             
