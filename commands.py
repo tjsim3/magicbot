@@ -390,11 +390,17 @@ def is_leader(member):
     return member.guild_permissions.administrator
 
 def get_db_connection():
-    """Get database connection - MAKE SURE THIS FUNCTION EXISTS"""
-    # This should already be in your code from previous implementations
-    # If not, add it here:
+    """Get SQLite database connection"""
     import sqlite3
-    return sqlite3.connect('data/gamelogs.db')  # Adjust path if needed
+    import os
+    
+    # Create data directory if it doesn't exist
+    os.makedirs('data', exist_ok=True)
+    
+    # Connect to SQLite database
+    conn = sqlite3.connect('data/gamelogs.db')
+    conn.row_factory = sqlite3.Row  # This allows column access by name
+    return conn
     
 async def can_use_log_commands(ctx):
     """Check if user is admin or teammate in this PolyELO game channel"""
