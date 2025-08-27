@@ -14,6 +14,8 @@ import sqlite3
 import json
 from datetime import datetime
 
+bot = None
+
 
 #button classes
 class DeleteConfirmView(ui.View):
@@ -2168,3 +2170,9 @@ if __name__ == "__main__":
         print("❌ DISCORD_TOKEN environment variable not set!")
         exit(1)
     bot.run(token)
+
+async def setup_commands(bot_instance):
+    """Setup function that receives the bot instance"""
+    global bot
+    bot = bot_instance
+    print("✅ Commands setup complete - bot instance received!")
