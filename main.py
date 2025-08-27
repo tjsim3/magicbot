@@ -12,6 +12,9 @@ intents.members = True
 
 bot = commands.Bot(command_prefix='%', intents=intents)
 
+import sys
+sys.modules['main'] = sys.modules[__name__]  # Make main module available
+
 from commands import setup_commands
 from events import setup_events
 
