@@ -68,13 +68,9 @@ class OngoingGame(Base):
 
 # Database setup
 def get_database_url():
-    """Get database URL from environment or use SQLite"""
-    if os.environ.get('DATABASE_URL'):
-        return os.environ.get('DATABASE_URL')
-    else:
-        # Use SQLite as fallback
-        os.makedirs('data', exist_ok=True)
-        return 'sqlite:///data/gamelogs.db'
+    # Force SQLite for now
+    os.makedirs('data', exist_ok=True)
+    return 'sqlite:///data/gamelogs.db'
 
 # Create engine and session
 engine = create_engine(
