@@ -14,6 +14,12 @@ import sqlite3
 import json
 from datetime import datetime
 
+try:
+    from main import bot
+except ImportError:
+    # Create a placeholder for initial import
+    bot = None
+
 #button classes
 class DeleteConfirmView(ui.View):
     def __init__(self, ctx, game_id, timeout=60):
