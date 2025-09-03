@@ -371,513 +371,503 @@ async def setup_commands(bot):
 
     #----------------- BOT COMMANDS --------------------
 
-    #----------------- LOG COMMANDS --------------------
+   #----------------- LOG COMMANDS --------------------
 
-    @bot.command(name='createlog')
-    @commands.check(can_use_log_commands)
-    async def create_log(ctx, config: str = None, *players_and_id):
-        """Create a new game log with interactive guidance"""
+# Load logs from JSON file
+def load_logs():
+    try:
+        with open('logs.json', 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {"games": {}, "logs": {}}
+
+# Save logs to JSON file
+def save_logs(logs_data):
+    with open('logs.json', 'w') as f:
+        json.dump(logs_data, f, indent=2)
+
+@bot.command(name='createlog')
+@commands.check(can_use_log_commands)
+async def create_log(ctx, config: str = None, *players_and_id):
+    """Create a new game log with interactive guidance"""
+    
+    # If no arguments provided, start interactive mode
+    if config is None:
+        await start_interactive_createlog(ctx)
+        return
+    
+    # Otherwise proceed with normal command processing
+    # ... (your existing createlog logic) ...
+
+async def start_interactive_createlog(ctx):
+    """Interactive create log with native Discord buttons"""
+    # Step 1: Config selection
+    embed = discord.Embed(
+        title="🎮 Create Game Log - Step 1/3",
+        description="Select the game configuration:",
+        color=0x00ff00
+    )
+    embed.add_field(name="2v2", value="4 players total", inline=True)
+    embed.add_field(name="3v3", value="6 players total", inline=True)
+    embed.set_footer(text="This message will guide you through creating a game log.")
+    
+    view = ConfigView(ctx)
+    message = await ctx.send(embed=embed, view=view)
+    
+    # Wait for button click
+    await view.wait()
+    
+    if view.value is False or view.config is None:
+        await message.edit(content="❌ Game creation cancelled.", embed=None, view=None)
+        return
+    
+    config = view.config
+    expected_players = 4 if config == "2v2" else 6
+    
+    # Step 2: Get players
+    embed = discord.Embed(
+        title=f"🎮 Create Game Log - Step 2/3",
+        description=f"**Configuration:** {config}\n\nPlease enter the player names for all {expected_players} players (separated by commas or new lines):",
+        color=0x00ff00
+    )
+    embed.add_field(
+        name="Example", 
+        value="```player1, player2, player3, player4```" if config == "2v2" else "```player1, player2, player3, player4, player5, player6```",
+        inline=False
+    )
+    
+    await message.edit(embed=embed, view=None)
+    
+    # Wait for player input
+    try:
+        player_msg = await bot.wait_for(
+            "message",
+            check=lambda m: m.author.id == ctx.author.id and m.channel.id == ctx.channel.id,
+            timeout=120.0
+        )
         
-        # If no arguments provided, start interactive mode
-        if config is None:
-            await start_interactive_createlog(ctx)
+        # Parse players
+        players_text = player_msg.content
+        players_list = [p.strip() for p in players_text.split(',') if p.strip()]
+        
+        # Also check for newlines if commas didn't work
+        if len(players_list) != expected_players and '\n' in players_text:
+            players_list = [p.strip() for p in players_text.split('\n') if p.strip()]
+        
+        # Validate player count
+        if len(players_list) != expected_players:
+            await ctx.send(f"❌ {config} requires {expected_players} players, but you provided {len(players_list)}. Please try `%createlog` again.")
             return
         
-        # Otherwise proceed with normal command processing
-        # ... (your existing createlog logic) ...
-    
-    async def start_interactive_createlog(ctx):
-        """Interactive create log with native Discord buttons"""
-        # Step 1: Config selection
+        # Step 3: Confirm and create
+        game_id = get_game_id_from_channel(ctx.channel.name)
+        
         embed = discord.Embed(
-            title="🎮 Create Game Log - Step 1/3",
-            description="Select the game configuration:",
+            title=f"🎮 Create Game Log - Step 3/3",
+            description="**Please review the details:**",
             color=0x00ff00
         )
-        embed.add_field(name="2v2", value="4 players total", inline=True)
-        embed.add_field(name="3v3", value="6 players total", inline=True)
-        embed.set_footer(text="This message will guide you through creating a game log.")
+        embed.add_field(name="Configuration", value=config, inline=True)
+        embed.add_field(name="Game ID", value=game_id or "Auto-detected", inline=True)
+        embed.add_field(name="Players", value="\n".join(players_list), inline=False)
         
-        view = ConfigView(ctx)
-        message = await ctx.send(embed=embed, view=view)
+        confirm_view = ConfirmView(ctx)
+        await message.edit(embed=embed, view=confirm_view)
         
-        # Wait for button click
-        await view.wait()
+        # Wait for confirmation
+        await confirm_view.wait()
         
-        if view.value is False or view.config is None:
+        if confirm_view.value is False:
             await message.edit(content="❌ Game creation cancelled.", embed=None, view=None)
             return
         
-        config = view.config
-        expected_players = 4 if config == "2v2" else 6
+        # Create the game
+        await message.edit(content="🔄 Creating game...", embed=None, view=None)
         
-        # Step 2: Get players
-        embed = discord.Embed(
-            title=f"🎮 Create Game Log - Step 2/3",
-            description=f"**Configuration:** {config}\n\nPlease enter the player names for all {expected_players} players (separated by commas or new lines):",
-            color=0x00ff00
-        )
-        embed.add_field(
-            name="Example", 
-            value="```player1, player2, player3, player4```" if config == "2v2" else "```player1, player2, player3, player4, player5, player6```",
-            inline=False
-        )
-        
-        await message.edit(embed=embed, view=None)
-        
-        # Wait for player input
         try:
-            player_msg = await bot.wait_for(
-                "message",
-                check=lambda m: m.author.id == ctx.author.id and m.channel.id == ctx.channel.id,
-                timeout=120.0
-            )
+            logs_data = load_logs()
+            final_game_id = game_id or str(ctx.channel.id)[-6:]
             
-            # Parse players
-            players_text = player_msg.content
-            players_list = [p.strip() for p in players_text.split(',') if p.strip()]
-            
-            # Also check for newlines if commas didn't work
-            if len(players_list) != expected_players and '\n' in players_text:
-                players_list = [p.strip() for p in players_text.split('\n') if p.strip()]
-            
-            # Validate player count
-            if len(players_list) != expected_players:
-                await ctx.send(f"❌ {config} requires {expected_players} players, but you provided {len(players_list)}. Please try `%createlog` again.")
+            # Check if game exists
+            if final_game_id in logs_data["games"]:
+                await ctx.send(f"❌ Game {final_game_id} already exists!")
                 return
             
-            # Step 3: Confirm and create
-            game_id = get_game_id_from_channel(ctx.channel.name)
+            # Create new game
+            logs_data["games"][final_game_id] = {
+                "config": config,
+                "players": players_list,
+                "created_at": datetime.now().isoformat(),
+                "created_by": ctx.author.id
+            }
             
-            embed = discord.Embed(
-                title=f"🎮 Create Game Log - Step 3/3",
-                description="**Please review the details:**",
+            # Initialize empty logs for this game
+            logs_data["logs"][final_game_id] = {}
+            
+            save_logs(logs_data)
+            
+            # Clean up
+            try:
+                await player_msg.delete()
+            except:
+                pass
+            
+            # Success
+            success_embed = discord.Embed(
+                title="✅ Game Log Created Successfully!",
+                description=f"**Game ID:** {final_game_id}\n**Config:** {config}",
                 color=0x00ff00
             )
-            embed.add_field(name="Configuration", value=config, inline=True)
-            embed.add_field(name="Game ID", value=game_id or "Auto-detected", inline=True)
-            embed.add_field(name="Players", value="\n".join(players_list), inline=False)
-            
-            confirm_view = ConfirmView(ctx)
-            await message.edit(embed=embed, view=confirm_view)
-            
-            # Wait for confirmation
-            await confirm_view.wait()
-            
-            if confirm_view.value is False:
-                await message.edit(content="❌ Game creation cancelled.", embed=None, view=None)
-                return
-            
-            # Create the game
-            await message.edit(content="🔄 Creating game...", embed=None, view=None)
-            
-            try:
-                conn = get_db_connection()
-                c = conn.cursor()
-                
-                final_game_id = game_id or str(ctx.channel.id)[-6:]
-                
-                # Check if game exists
-                c.execute("SELECT game_id FROM games WHERE game_id = ?", (final_game_id,))
-                if c.fetchone():
-                    await ctx.send(f"❌ Game {final_game_id} already exists!")
-                    conn.close()
-                    return
-                
-                # Insert new game
-                c.execute('''INSERT INTO games (game_id, config, players, created_at, created_by)
-                             VALUES (?, ?, ?, ?, ?)''',
-                         (final_game_id, config, json.dumps(players_list), datetime.now(), ctx.author.id))
-                
-                conn.commit()
-                conn.close()
-                
-                # Clean up
-                try:
-                    await player_msg.delete()
-                except:
-                    pass
-                
-                # Success
-                success_embed = discord.Embed(
-                    title="✅ Game Log Created Successfully!",
-                    description=f"**Game ID:** {final_game_id}\n**Config:** {config}",
-                    color=0x00ff00
-                )
-                success_embed.add_field(name="Players", value="\n".join(players_list), inline=False)
-                success_embed.add_field(
-                    name="Next Steps", 
-                    value=f"Use `%log` to add turns:\n`%log 500 500 500 500`",
-                    inline=False
-                )
-                
-                await message.edit(content=None, embed=success_embed, view=None)
-                
-            except Exception as e:
-                await ctx.send(f"❌ Error creating game: {str(e)}")
-                
-        except asyncio.TimeoutError:
-            await message.edit(content="⏰ Input timed out. Please try `%createlog` again.", embed=None, view=None)
-    
-    
-    @bot.command(name='log')
-    @commands.check(can_use_log_commands)
-    async def add_log(ctx, *args):
-        """Add turn log to a game. Usage: %log score1 score2 score3 score4 [notes] [gameID]"""
-        # Get game ID from channel name first
-        game_id = get_game_id_from_channel(ctx.channel.name)
-        
-        # Parse arguments
-        scores = []
-        notes = "No notes"
-        provided_game_id = None
-        
-        # Only check for game ID if it's 6 digits (actual game ID length)
-        if args and args[-1].isdigit() and len(args[-1]) == 6:
-            provided_game_id = args[-1]
-            args = args[:-1]
-        
-        # Use provided game ID or channel-detected game ID
-        game_id = provided_game_id or game_id
-        
-        if game_id is None:
-            await ctx.send("❌ No game ID provided and couldn't find one in channel name!")
-            return
-        
-        # Check if there are notes (non-numeric argument)
-        if args and not args[-1].isdigit():
-            notes = args[-1]
-            args = args[:-1]
-        
-        # The remaining args should be scores
-        try:
-            scores = [int(arg) for arg in args]
-        except ValueError:
-            await ctx.send("❌ Scores must be integers")
-            return
-        
-        try:
-            conn = get_db_connection()
-            c = conn.cursor()
-            
-            # Get game config to validate score count
-            c.execute("SELECT config, players FROM games WHERE game_id = ?", (game_id,))
-            game = c.fetchone()
-            
-            if not game:
-                await ctx.send(f"❌ Game {game_id} not found! Use %createlog first.")
-                conn.close()
-                return
-            
-            config = game[0]
-            expected_scores = 4 if config.lower() == '2v2' else 6
-            
-            if len(scores) != expected_scores:
-                await ctx.send(f"❌ {config} requires {expected_scores} scores, got {len(scores)}")
-                conn.close()
-                return
-            
-            # Get next turn number - CHANGED TO START AT 0
-            c.execute("SELECT COALESCE(MAX(turn), -1) + 1 FROM logs WHERE game_id = ?", (game_id,))
-            next_turn = c.fetchone()[0]
-            
-            # Insert log
-            c.execute('''INSERT INTO logs (game_id, turn, scores, notes, logged_at)
-                         VALUES (?, ?, ?, ?, ?)''',
-                     (game_id, next_turn, json.dumps(scores), notes, datetime.now()))
-            
-            conn.commit()
-            
-            # Show confirmation
-            c.execute("SELECT players FROM games WHERE game_id = ?", (game_id,))
-            players_json = c.fetchone()[0]
-            players = json.loads(players_json)
-            
-            confirmation = f"✅ **Turn {next_turn} logged successfully for game {game_id}:**\n"
-            confirmation += "\n".join(f"{players[i]}: {scores[i]}" for i in range(len(scores)))
-            if notes and notes != "No notes":
-                confirmation += f"\n*Notes:* {notes}"
-            
-            await ctx.send(confirmation)
-            conn.close()
-            
-        except Exception as e:
-            await ctx.send(f"❌ Error adding log: {str(e)}")
-
-
-    @bot.command(name='undo')
-    @commands.check(can_use_log_commands)
-    async def undo_last_turn(ctx, game_id: str = None):
-        """Remove the most recent turn. Usage: %undo [gameID]"""
-        # Get game ID from channel name if not provided
-        if game_id is None:
-            game_id = get_game_id_from_channel(ctx.channel.name)
-            if game_id is None:
-                await ctx.send("❌ No game ID provided and couldn't find one in channel name!")
-                return
-        
-        try:
-            conn = get_db_connection()
-            c = conn.cursor()
-            
-            # First check if game exists
-            c.execute("SELECT config, players FROM games WHERE game_id = ?", (game_id,))
-            game = c.fetchone()
-            
-            if not game:
-                await ctx.send(f"❌ Game {game_id} not found!")
-                conn.close()
-                return
-            
-            # Get the most recent turn
-            c.execute("SELECT turn, scores, notes FROM logs WHERE game_id = ? ORDER BY turn DESC LIMIT 1", (game_id,))
-            last_turn = c.fetchone()
-            
-            if not last_turn:
-                await ctx.send(f"❌ No turns found for game {game_id}!")
-                conn.close()
-                return
-            
-            turn_number, scores_json, notes = last_turn
-            scores = json.loads(scores_json)
-            
-            # Get players for display
-            players = json.loads(game[1])
-            
-            # Confirm deletion
-            confirmation_msg = (
-                f"⚠️ **Are you sure you want to delete Turn {turn_number}?**\n"
-                f"**Scores:** {', '.join(f'{players[i]}: {scores[i]}' for i in range(len(scores)))}\n"
-                f"**Notes:** {notes}\n\n"
-                f"Type `confirm` in the next 30 seconds to proceed, or anything else to cancel."
+            success_embed.add_field(name="Players", value="\n".join(players_list), inline=False)
+            success_embed.add_field(
+                name="Next Steps", 
+                value=f"Use `%log` to add turns:\n`%log 500 500 500 500`",
+                inline=False
             )
             
-            await ctx.send(confirmation_msg)
-            
-            # Wait for confirmation
-            def check(m):
-                return m.author == ctx.author and m.channel == ctx.channel
-            
-            try:
-                response = await bot.wait_for('message', timeout=30.0, check=check)
-                
-                if response.content.lower() == 'confirm':
-                    # Delete the turn
-                    c.execute("DELETE FROM logs WHERE game_id = ? AND turn = ?", (game_id, turn_number))
-                    conn.commit()
-                    
-                    # Check if any turns remain
-                    c.execute("SELECT COUNT(*) FROM logs WHERE game_id = ?", (game_id,))
-                    remaining_turns = c.fetchone()[0]
-                    
-                    await ctx.send(f"✅ **Turn {turn_number} deleted successfully!**\n"
-                                  f"**Game {game_id}** now has {remaining_turns} turn{'s' if remaining_turns != 1 else ''}.")
-                else:
-                    await ctx.send("❌ Turn deletion cancelled.")
-                    
-            except asyncio.TimeoutError:
-                await ctx.send("⏰ Turn deletion timed out. Please try again.")
-            
-            conn.close()
+            await message.edit(content=None, embed=success_embed, view=None)
             
         except Exception as e:
-            await ctx.send(f"❌ Error undoing turn: {str(e)}")
+            await ctx.send(f"❌ Error creating game: {str(e)}")
+            
+    except asyncio.TimeoutError:
+        await message.edit(content="⏰ Input timed out. Please try `%createlog` again.", embed=None, view=None)
+
+
+@bot.command(name='log')
+@commands.check(can_use_log_commands)
+async def add_log(ctx, *args):
+    """Add turn log to a game. Usage: %log score1 score2 score3 score4 [notes] [gameID]"""
+    # Get game ID from channel name first
+    game_id = get_game_id_from_channel(ctx.channel.name)
     
-    @bot.command(name='showlogs')
-    @commands.check(can_use_log_commands)
-    async def show_logs(ctx, game_id: str = None, turn_range: str = None):
-        """Show logs for a game. Usage: %showlogs [gameID] [turn|start-end]"""
-        # Get game ID from channel name if not provided
-        if game_id is None:
-            game_id = get_game_id_from_channel(ctx.channel.name)
-            if game_id is None:
-                await ctx.send("❌ No game ID provided and couldn't find one in channel name!")
-                return
+    # Parse arguments
+    scores = []
+    notes = "No notes"
+    provided_game_id = None
+    
+    # Only check for game ID if it's 6 digits (actual game ID length)
+    if args and args[-1].isdigit() and len(args[-1]) == 6:
+        provided_game_id = args[-1]
+        args = args[:-1]
+    
+    # Use provided game ID or channel-detected game ID
+    game_id = provided_game_id or game_id
+    
+    if game_id is None:
+        await ctx.send("❌ No game ID provided and couldn't find one in channel name!")
+        return
+    
+    # Check if there are notes (non-numeric argument)
+    if args and not args[-1].isdigit():
+        notes = args[-1]
+        args = args[:-1]
+    
+    # The remaining args should be scores
+    try:
+        scores = [int(arg) for arg in args]
+    except ValueError:
+        await ctx.send("❌ Scores must be integers")
+        return
+    
+    try:
+        logs_data = load_logs()
         
-        try:
-            conn = get_db_connection()
-            c = conn.cursor()
-            
-            # Get game info FIRST
-            c.execute("SELECT config, players FROM games WHERE game_id = ?", (game_id,))
-            game = c.fetchone()
-            
-            if not game:
-                await ctx.send(f"❌ Game {game_id} not found!")
-                conn.close()
-                return
-            
-            config, players_json = game  # This defines 'config' variable
-            players = json.loads(players_json)
-            
-            # Parse turn range if provided
-            start_turn = end_turn = None
-            if turn_range:
-                if '-' in turn_range:
-                    try:
-                        start_turn, end_turn = map(int, turn_range.split('-'))
-                    except ValueError:
-                        await ctx.send("❌ Turn range must be in format 'start-end' (e.g., '3-7')")
-                        conn.close()
-                        return
-                else:
-                    try:
-                        start_turn = end_turn = int(turn_range)
-                    except ValueError:
-                        await ctx.send("❌ Turn must be a number")
-                        conn.close()
-                        return
-            
-            # Build query with optional turn filtering
-            if start_turn is not None:
-                query = "SELECT turn, scores, notes, logged_at FROM logs WHERE game_id = ? AND turn BETWEEN ? AND ? ORDER BY turn"
-                params = (game_id, start_turn, end_turn)
-            else:
-                query = "SELECT turn, scores, notes, logged_at FROM logs WHERE game_id = ? ORDER BY turn"
-                params = (game_id,)
-            
-            c.execute(query, params)
-            logs = c.fetchall()
-            conn.close()
-            
-            # Format output
-            if not logs:
-                range_text = f" (turns {turn_range})" if turn_range else ""
-                await ctx.send(f"📝 Game {game_id} ({config}){range_text} - No logs found\n**Players:** {', '.join(players)}")
-                return
-            
-            response = [f"**📝 Game {game_id} ({config}) - {len(logs)} turns**"]
-            if turn_range:
-                response[0] += f" (showing {turn_range})"
-            response.append(f"**Players:** {', '.join(players)}")
-            response.append("")
-            
-            for turn, scores_json, notes, logged_at in logs:
-                scores = json.loads(scores_json)
-                score_display = " | ".join(f"{players[i]}: {scores[i]}" for i in range(len(scores)))
-                response.append(f"**Turn {turn}:** {score_display}")
-                if notes and notes != "No notes":
-                    response.append(f"   *Notes:* {notes}")
-                response.append("")
-            
-            # Send in chunks if too long
-            full_response = "\n".join(response)
-            if len(full_response) > 2000:
-                chunks = [full_response[i:i+2000] for i in range(0, len(full_response), 2000)]
-                for chunk in chunks:
-                    await ctx.send(chunk)
-            else:
-                await ctx.send(full_response)
-                
-        except Exception as e:
-            await ctx.send(f"❌ Error showing logs: {str(e)}")
-    
-    @bot.command(name='deletelog')
-    @commands.check(can_use_log_commands)
-    async def delete_log(ctx, game_id: str = None):
-        """Delete a game log (Admin only). Usage: %deletelog [gameID]"""
-        # If no game ID provided, try to detect from channel name
-        if game_id is None:
-            game_id = get_game_id_from_channel(ctx.channel.name)
-            if game_id is None:
-                await ctx.send("❌ No game ID provided and couldn't find one in channel name!")
-                return
+        # Get game config to validate score count
+        if game_id not in logs_data["games"]:
+            await ctx.send(f"❌ Game {game_id} not found! Use %createlog first.")
+            return
         
-        try:
-            conn = get_db_connection()
-            c = conn.cursor()
-            
-            # Check if game exists first
-            c.execute("SELECT game_id FROM games WHERE game_id = ?", (game_id,))
-            if not c.fetchone():
-                await ctx.send(f"❌ Game {game_id} not found!")
-                conn.close()
-                return
-            
-            # Delete logs and game
-            c.execute("DELETE FROM logs WHERE game_id = ?", (game_id,))
-            c.execute("DELETE FROM games WHERE game_id = ?", (game_id,))
-            
-            conn.commit()
-            conn.close()
-            
-            await ctx.send(f"✅ Game {game_id} and all logs deleted")
-            
-        except Exception as e:
-            await ctx.send(f"❌ Error deleting log: {str(e)}")
-    
-    @bot.command(name='editlog')
-    @commands.check(can_use_log_commands)
-    async def edit_log(ctx, turn: int, *args):
-        """Edit a specific turn log. Usage: %editlog 5 10 20 30 40 [notes] [gameID]"""
-        # Get game ID from channel name if not provided
+        game = logs_data["games"][game_id]
+        config = game["config"]
+        expected_scores = 4 if config.lower() == '2v2' else 6
+        
+        if len(scores) != expected_scores:
+            await ctx.send(f"❌ {config} requires {expected_scores} scores, got {len(scores)}")
+            return
+        
+        # Get next turn number - CHANGED TO START AT 0
+        game_logs = logs_data["logs"][game_id]
+        next_turn = max(game_logs.keys(), default=-1) + 1
+        
+        # Add log
+        logs_data["logs"][game_id][next_turn] = {
+            "scores": scores,
+            "notes": notes,
+            "logged_at": datetime.now().isoformat()
+        }
+        
+        save_logs(logs_data)
+        
+        # Show confirmation
+        players = game["players"]
+        
+        confirmation = f"✅ **Turn {next_turn} logged successfully for game {game_id}:**\n"
+        confirmation += "\n".join(f"{players[i]}: {scores[i]}" for i in range(len(scores)))
+        if notes and notes != "No notes":
+            confirmation += f"\n*Notes:* {notes}"
+        
+        await ctx.send(confirmation)
+        
+    except Exception as e:
+        await ctx.send(f"❌ Error adding log: {str(e)}")
+
+
+@bot.command(name='undo')
+@commands.check(can_use_log_commands)
+async def undo_last_turn(ctx, game_id: str = None):
+    """Remove the most recent turn. Usage: %undo [gameID]"""
+    # Get game ID from channel name if not provided
+    if game_id is None:
         game_id = get_game_id_from_channel(ctx.channel.name)
-        
-        # Parse arguments
-        scores = []
-        notes = "No notes"
-        provided_game_id = None
-        
-        # Check if last argument is a game ID (6 digits)
-        if args and args[-1].isdigit() and len(args[-1]) == 6:
-            provided_game_id = args[-1]
-            args = args[:-1]
-        
-        # Use provided game ID or channel-detected game ID
-        game_id = provided_game_id or game_id
-        
         if game_id is None:
             await ctx.send("❌ No game ID provided and couldn't find one in channel name!")
             return
+    
+    try:
+        logs_data = load_logs()
         
-        # Check if there are notes (non-numeric argument)
-        if args and not args[-1].isdigit():
-            notes = args[-1]
-            args = args[:-1]
-        
-        # The remaining args should be scores
-        try:
-            scores = [int(arg) for arg in args]
-        except ValueError:
-            await ctx.send("❌ Scores must be integers")
+        # First check if game exists
+        if game_id not in logs_data["games"]:
+            await ctx.send(f"❌ Game {game_id} not found!")
             return
         
+        game = logs_data["games"][game_id]
+        game_logs = logs_data["logs"][game_id]
+        
+        # Get the most recent turn
+        if not game_logs:
+            await ctx.send(f"❌ No turns found for game {game_id}!")
+            return
+        
+        turn_number = max(game_logs.keys())
+        turn_data = game_logs[turn_number]
+        scores = turn_data["scores"]
+        notes = turn_data["notes"]
+        
+        # Get players for display
+        players = game["players"]
+        
+        # Confirm deletion
+        confirmation_msg = (
+            f"⚠️ **Are you sure you want to delete Turn {turn_number}?**\n"
+            f"**Scores:** {', '.join(f'{players[i]}: {scores[i]}' for i in range(len(scores)))}\n"
+            f"**Notes:** {notes}\n\n"
+            f"Type `confirm` in the next 30 seconds to proceed, or anything else to cancel."
+        )
+        
+        await ctx.send(confirmation_msg)
+        
+        # Wait for confirmation
+        def check(m):
+            return m.author == ctx.author and m.channel == ctx.channel
+        
         try:
-            conn = get_db_connection()
-            c = conn.cursor()
+            response = await bot.wait_for('message', timeout=30.0, check=check)
             
-            # Get game config to validate score count
-            c.execute("SELECT config FROM games WHERE game_id = ?", (game_id,))
-            game = c.fetchone()
-            
-            if not game:
-                await ctx.send(f"❌ Game {game_id} not found!")
-                conn.close()
-                return
-            
-            config = game[0]
-            expected_scores = 4 if config.lower() == '2v2' else 6
-            
-            if len(scores) != expected_scores:
-                await ctx.send(f"❌ {config} requires {expected_scores} scores, got {len(scores)}")
-                conn.close()
-                return
-            
-            # Update log
-            c.execute('''UPDATE logs SET scores = ?, notes = ?, logged_at = ?
-                         WHERE game_id = ? AND turn = ?''',
-                     (json.dumps(scores), notes, datetime.now(), game_id, turn))
-            
-            if c.rowcount == 0:
-                await ctx.send(f"❌ Turn {turn} not found for game {game_id}")
+            if response.content.lower() == 'confirm':
+                # Delete the turn
+                del logs_data["logs"][game_id][turn_number]
+                save_logs(logs_data)
+                
+                # Check if any turns remain
+                remaining_turns = len(logs_data["logs"][game_id])
+                
+                await ctx.send(f"✅ **Turn {turn_number} deleted successfully!**\n"
+                              f"**Game {game_id}** now has {remaining_turns} turn{'s' if remaining_turns != 1 else ''}.")
             else:
-                conn.commit()
-                await ctx.send(f"✅ Turn {turn} updated for game {game_id}")
+                await ctx.send("❌ Turn deletion cancelled.")
+                
+        except asyncio.TimeoutError:
+            await ctx.send("⏰ Turn deletion timed out. Please try again.")
+        
+    except Exception as e:
+        await ctx.send(f"❌ Error undoing turn: {str(e)}")
+
+@bot.command(name='showlogs')
+@commands.check(can_use_log_commands)
+async def show_logs(ctx, game_id: str = None, turn_range: str = None):
+    """Show logs for a game. Usage: %showlogs [gameID] [turn|start-end]"""
+    # Get game ID from channel name if not provided
+    if game_id is None:
+        game_id = get_game_id_from_channel(ctx.channel.name)
+        if game_id is None:
+            await ctx.send("❌ No game ID provided and couldn't find one in channel name!")
+            return
+    
+    try:
+        logs_data = load_logs()
+        
+        # Get game info FIRST
+        if game_id not in logs_data["games"]:
+            await ctx.send(f"❌ Game {game_id} not found!")
+            return
+        
+        game = logs_data["games"][game_id]
+        config = game["config"]
+        players = game["players"]
+        
+        # Parse turn range if provided
+        start_turn = end_turn = None
+        if turn_range:
+            if '-' in turn_range:
+                try:
+                    start_turn, end_turn = map(int, turn_range.split('-'))
+                except ValueError:
+                    await ctx.send("❌ Turn range must be in format 'start-end' (e.g., '3-7')")
+                    return
+            else:
+                try:
+                    start_turn = end_turn = int(turn_range)
+                except ValueError:
+                    await ctx.send("❌ Turn must be a number")
+                    return
+        
+        # Get logs with optional turn filtering
+        game_logs = logs_data["logs"][game_id]
+        
+        # Filter logs by turn range if specified
+        if start_turn is not None:
+            logs = {turn: data for turn, data in game_logs.items() 
+                   if start_turn <= turn <= end_turn}
+        else:
+            logs = game_logs
+        
+        # Sort by turn number
+        sorted_logs = sorted(logs.items(), key=lambda x: x[0])
+        
+        # Format output
+        if not sorted_logs:
+            range_text = f" (turns {turn_range})" if turn_range else ""
+            await ctx.send(f"📝 Game {game_id} ({config}){range_text} - No logs found\n**Players:** {', '.join(players)}")
+            return
+        
+        response = [f"**📝 Game {game_id} ({config}) - {len(sorted_logs)} turns**"]
+        if turn_range:
+            response[0] += f" (showing {turn_range})"
+        response.append(f"**Players:** {', '.join(players)}")
+        response.append("")
+        
+        for turn, turn_data in sorted_logs:
+            scores = turn_data["scores"]
+            notes = turn_data["notes"]
+            score_display = " | ".join(f"{players[i]}: {scores[i]}" for i in range(len(scores)))
+            response.append(f"**Turn {turn}:** {score_display}")
+            if notes and notes != "No notes":
+                response.append(f"   *Notes:* {notes}")
+            response.append("")
+        
+        # Send in chunks if too long
+        full_response = "\n".join(response)
+        if len(full_response) > 2000:
+            chunks = [full_response[i:i+2000] for i in range(0, len(full_response), 2000)]
+            for chunk in chunks:
+                await ctx.send(chunk)
+        else:
+            await ctx.send(full_response)
             
-            conn.close()
-            
-        except Exception as e:
-            await ctx.send(f"❌ Error editing log: {str(e)}")
+    except Exception as e:
+        await ctx.send(f"❌ Error showing logs: {str(e)}")
+
+@bot.command(name='deletelog')
+@commands.check(can_use_log_commands)
+async def delete_log(ctx, game_id: str = None):
+    """Delete a game log (Admin only). Usage: %deletelog [gameID]"""
+    # If no game ID provided, try to detect from channel name
+    if game_id is None:
+        game_id = get_game_id_from_channel(ctx.channel.name)
+        if game_id is None:
+            await ctx.send("❌ No game ID provided and couldn't find one in channel name!")
+            return
+    
+    try:
+        logs_data = load_logs()
+        
+        # Check if game exists first
+        if game_id not in logs_data["games"]:
+            await ctx.send(f"❌ Game {game_id} not found!")
+            return
+        
+        # Delete game and logs
+        del logs_data["games"][game_id]
+        if game_id in logs_data["logs"]:
+            del logs_data["logs"][game_id]
+        
+        save_logs(logs_data)
+        
+        await ctx.send(f"✅ Game {game_id} and all logs deleted")
+        
+    except Exception as e:
+        await ctx.send(f"❌ Error deleting log: {str(e)}")
+
+@bot.command(name='editlog')
+@commands.check(can_use_log_commands)
+async def edit_log(ctx, turn: int, *args):
+    """Edit a specific turn log. Usage: %editlog 5 10 20 30 40 [notes] [gameID]"""
+    # Get game ID from channel name if not provided
+    game_id = get_game_id_from_channel(ctx.channel.name)
+    
+    # Parse arguments
+    scores = []
+    notes = "No notes"
+    provided_game_id = None
+    
+    # Check if last argument is a game ID (6 digits)
+    if args and args[-1].isdigit() and len(args[-1]) == 6:
+        provided_game_id = args[-1]
+        args = args[:-1]
+    
+    # Use provided game ID or channel-detected game ID
+    game_id = provided_game_id or game_id
+    
+    if game_id is None:
+        await ctx.send("❌ No game ID provided and couldn't find one in channel name!")
+        return
+    
+    # Check if there are notes (non-numeric argument)
+    if args and not args[-1].isdigit():
+        notes = args[-1]
+        args = args[:-1]
+    
+    # The remaining args should be scores
+    try:
+        scores = [int(arg) for arg in args]
+    except ValueError:
+        await ctx.send("❌ Scores must be integers")
+        return
+    
+    try:
+        logs_data = load_logs()
+        
+        # Get game config to validate score count
+        if game_id not in logs_data["games"]:
+            await ctx.send(f"❌ Game {game_id} not found!")
+            return
+        
+        game = logs_data["games"][game_id]
+        config = game["config"]
+        expected_scores = 4 if config.lower() == '2v2' else 6
+        
+        if len(scores) != expected_scores:
+            await ctx.send(f"❌ {config} requires {expected_scores} scores, got {len(scores)}")
+            return
+        
+        # Update log
+        if turn not in logs_data["logs"][game_id]:
+            await ctx.send(f"❌ Turn {turn} not found for game {game_id}")
+            return
+        
+        logs_data["logs"][game_id][turn] = {
+            "scores": scores,
+            "notes": notes,
+            "logged_at": datetime.now().isoformat()
+        }
+        
+        save_logs(logs_data)
+        await ctx.send(f"✅ Turn {turn} updated for game {game_id}")
+        
+    except Exception as e:
+        await ctx.send(f"❌ Error editing log: {str(e)}")
 
     #----------------- TRIBE DETECTOR COMMAND-----------
     @bot.command(name='detect')
