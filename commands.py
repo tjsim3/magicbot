@@ -1465,9 +1465,8 @@ async def edit_log(ctx, turn: int, *args):
         
         print(f"✅ User has Spellkeeper role: {spellkeeper_role}")
         
-        # ADDED: Channel group restriction
-        # Replace these IDs with your actual category/channel group IDs
-        ALLOWED_CATEGORY_IDS = [1398755280384430130, 1398755544239444168]  # Replace with your actual category IDs
+
+        ALLOWED_CATEGORY_IDS = [1398755280384430130, 1398755544239444168, 1400238534677233817]  
         
         if ctx.channel.category_id not in ALLOWED_CATEGORY_IDS:
             await ctx.send("❌ This command can only be used in specific channel groups!")
