@@ -290,7 +290,7 @@ def create_duel_embed(title, description, color):
         color=color
     )
 
-async def setup_commands(bot):
+async def setup_commands(bot: commands.Bot):
     """Setup all bot commands"""
     init_database()
     global signup_message_id, signups
