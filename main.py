@@ -15,6 +15,7 @@ intents.members = True  # Enable if you need member-related events
 
 # Create bot instance
 bot = commands.Bot(command_prefix='%', intents=intents)
+await setup_events(bot)
 bot.start_time = time.time()
 
 
