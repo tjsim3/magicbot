@@ -14,6 +14,14 @@ import sqlite3
 import json
 from datetime import datetime
 
+# Bot setup
+intents = discord.Intents.default()
+intents.message_content = True
+bot = commands.Bot(command_prefix='%', intents=intents)
+
+# Store start time for uptime calculation
+bot.start_time = time.time()
+
 
 #button classes
 class MapSelectView(ui.View):
@@ -1850,13 +1858,7 @@ async def edit_log(ctx, turn: int, *args):
     
     print("✅ Commands loaded successfully!")
 
-# Bot setup
-intents = discord.Intents.default()
-intents.message_content = True
-bot = commands.Bot(command_prefix='%', intents=intents)
 
-# Store start time for uptime calculation
-bot.start_time = time.time()
 
 # Event handlers
 @bot.event
