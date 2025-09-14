@@ -1849,40 +1849,40 @@ async def setup_commands(bot: commands.Bot):
     print("✅ Commands loaded successfully!")
 
 
-
-# Event handlers
-@bot.event
-async def on_ready():
-    print(f'{bot.user} has connected to Discord!')
-    await bot.change_presence(
-        activity=discord.Activity(
-            type=discord.ActivityType.watching,  
-            name="use %helpme"  # No space between % and helpme
+async def setup_events(bot: discord.Bot):
+    # Event handlers
+    @bot.event
+    async def on_ready():
+        print(f'{bot.user} has connected to Discord!')
+        await bot.change_presence(
+            activity=discord.Activity(
+                type=discord.ActivityType.watching,  
+                name="use %helpme"  # No space between % and helpme
+            )
         )
-    )
+        
+        # Setup commands and start scheduler
+        await setup_commands(bot)
+        bot.monthly_scheduler.start()
     
-    # Setup commands and start scheduler
-    await setup_commands(bot)
-    bot.monthly_scheduler.start()
-
-@bot.event
-async def on_reaction_add(reaction, user):
-    """Handle reaction-based signups"""
-    global signups
+    @bot.event
+    async def on_reaction_add(reaction, user):
+        """Handle reaction-based signups"""
+        global signups
+        
+        # Skip bot reactions
+        if user.bot:
+            return
+        
+        # Check if this is the signup message
+        if reaction.message.id == signup_message_id and str(reaction.emoji) == "🐼":
+            signups.add(user.id)
+            print(f"✅ {user.name} signed up for training matches")
     
-    # Skip bot reactions
-    if user.bot:
-        return
-    
-    # Check if this is the signup message
-    if reaction.message.id == signup_message_id and str(reaction.emoji) == "🐼":
-        signups.add(user.id)
-        print(f"✅ {user.name} signed up for training matches")
-
-# Run the bot
-if __name__ == "__main__":
-    token = os.getenv('DISCORD_TOKEN')
-    if not token:
-        print("❌ DISCORD_TOKEN environment variable not set!")
-        exit(1)
-    bot.run(token)
+    # Run the bot
+    if __name__ == "__main__":
+        token = os.getenv('DISCORD_TOKEN')
+        if not token:
+            print("❌ DISCORD_TOKEN environment variable not set!")
+            exit(1)
+        bot.run(token)
