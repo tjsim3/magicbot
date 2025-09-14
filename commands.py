@@ -1849,7 +1849,7 @@ async def setup_commands(bot: commands.Bot):
     print("✅ Commands loaded successfully!")
 
 
-async def setup_events(bot: discord.Bot):
+async def setup_events(bot: commands.Bot):
     # Event handlers
     @bot.event
     async def on_ready():
