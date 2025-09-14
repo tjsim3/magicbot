@@ -6,6 +6,9 @@ from discord.ext import commands
 from commands import setup_commands  # Changed from bot.commands
 from events import setup_events      # Changed from bot.events
 from models import create_app
+from dotenv import load_dotenv
+
+load_dotenv()
 
 #from discord_components import DiscordComponents
 
