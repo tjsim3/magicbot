@@ -15,6 +15,8 @@ intents.members = True  # Enable if you need member-related events
 
 # Create bot instance
 bot = commands.Bot(command_prefix='%', intents=intents)
+bot.start_time = time.time()
+
 
 #DiscordComponents(bot)
 
