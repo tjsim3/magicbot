@@ -14,12 +14,6 @@ import sqlite3
 import json
 from datetime import datetime
 
-
-
-# Store start time for uptime calculation
-bot.start_time = time.time()
-
-
 #button classes
 class MapSelectView(ui.View):
     def __init__(self, ctx, timeout=60):
