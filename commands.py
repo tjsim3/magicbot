@@ -14,10 +14,7 @@ import sqlite3
 import json
 from datetime import datetime
 
-# Bot setup
-intents = discord.Intents.default()
-intents.message_content = True
-bot = commands.Bot(command_prefix='%', intents=intents)
+
 
 # Store start time for uptime calculation
 bot.start_time = time.time()
@@ -405,7 +402,6 @@ async def create_log(ctx, config: str = None, *players_and_id):
         return
     
     # Otherwise proceed with normal command processing
-    # ... (your existing createlog logic) ...
 
 async def start_interactive_createlog(ctx):
     """Interactive create log with native Discord buttons"""
